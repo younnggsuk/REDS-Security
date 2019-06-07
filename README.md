@@ -612,7 +612,8 @@
 - 만약 다른 roothub, port들을 제한하려면 위의 소스에서 번호를 수정한 후 다시 컴파일을 하고 해당 커널로 부팅을 해야 한다.
 
 ## 11. 실험 및 결과
-- 
+- Linux ubuntu
+- 커널 버전 : 4.19.0-rc5+
 	### 11.1 실험 순서
 	1. PC의 모든 port들에 usb장치들을 연결해보며 dmesg를 통해 커널이 roothub와 port들의 번호를 어떻게 매기고 있는지 확인한다.
 	2. 10절에서 수정한 linux/drivers/usb/core/config.c의 usb_parse_configuration()을 제한하고자 하는 roothub, port의 번호로 수정한 후 컴파일하고 해당 커널로 부팅한다. (여기서는 1번 roothub의 2번 port는 Mass storage, 9번 port는 HID로 제한했다.
