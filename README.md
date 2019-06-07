@@ -163,137 +163,126 @@
 
 - 따라서 위의 두 함수를 호출하기 전에 이미 usb_device구조체가 생성되었다는 것과 이 함수를 호출한 위치를 따라가보면 usb_device가 생성되는 지점을 찾을 수 있다는 것을 알 수 있다.
 
-7. struct usb_device의 allocation
-위에서 설명한 함수중 hub_port_init()의 호출 위치를 따라가보면 hub_port_connect()가 나온다. (linux/drivers/usb/core/hub.c)
-그리고 이 함수 내에서 hub_port_init()을 호출하는 형태는 아래와 같다.
-status = hub_port_init(hub, udev, port1, i);
-여기서 전달되는 인자 중 udev가 우리가 찾는 연결된 장치의 usb_device 구조체이다.
+## 7. struct usb_device의 allocation
+- 위에서 설명한 함수중 hub_port_init()의 호출 위치를 따라가보면 hub_port_connect()가 나온다. (linux/drivers/usb/core/hub.c)
+- 그리고 이 함수 내에서 hub_port_init()을 호출하는 형태는 아래와 같다.
+	status = hub_port_init(hub, udev, port1, i);
+- 여기서 전달되는 인자 중 udev가 우리가 찾는 연결된 장치의 usb_device 구조체이다.
+- 그리고 위 코드에서 조금 위로 가보면 아래와 같은 코드가 있는 것을 확인할 수 있다.
+	udev = usb_alloc_dev(hdev, hdev->bus, port1);
+- 그리고 usb_alloc_dev()의 주석을 보면 다음과 같다.
+	~~~
+	/**
+	 * usb_alloc_dev - usb device constructor (usbcore-internal)
+	 * @parent: hub to which device is connected; null to allocate a root hub
+	 * @bus: bus used to access the device
+	 * @port1: one-based index of port; ignored for root hubs
+	 * Context: !in_interrupt()
+	 *
+	 * Only hub drivers (including virtual root hub drivers for host
+	 * controllers) should ever call this.
+	 *
+	 * This call may not be used in a non-sleeping context.
+	 *
+	 * Return: On success, a pointer to the allocated usb device. %NULL on
+	 * failure.
+	 */
+	 ~~~
+- 위 주석을 보면 usb 장치에 대한 구조체를 생성하는 함수이며 성공 시 할당된 usb 장치의 struct usb_device의 포인터를 반환한다고 되어있다.
+- 따라서 usb_alloc_dev()에서 struct usb_device를 생성한 후 hub_port_init()으로 넘겨주는 구조인 것을 확인할 수 있으며 usb_alloc_dev()가 usb_device 구조체를 생성하는 함수라는 것을 알 수 있다. 
 
-그리고 위 코드에서 조금 위로 가보면 아래와 같은 코드가 있는 것을 확인할 수 있다.
-udev = usb_alloc_dev(hdev, hdev->bus, port1);
+## 8. struct usb_device의 enumeration
+- announce_device()는 usb_new_device()내에서 호출되며 함수 형태는 아래와 같다. (linux/drivers/usb/core/hub.c)
+	int usb_new_device(struct usb_device *udev)
+- usb_new_device()는 주석을 통해서 함수를 설명하고 있는데 그 내용은 다음과 같다.
+	~~~
+	/**
+	 * usb_new_device - perform initial device setup (usbcore-internal)
+	 * @udev: newly addressed device (in ADDRESS state)
+	 *
+	 * This is called with devices which have been detected but not fully
+	 * enumerated.  The device descriptor is available, but not descriptors
+	 * for any device configuration.  The caller must have locked either
+	 * the parent hub (if udev is a normal device) or else the
+	 * usb_bus_idr_lock (if udev is a root hub).  The parent's pointer to
+	 * udev has already been installed, but udev is not yet visible through
+	 * sysfs or other filesystem code.
+	 *
+	 * This call is synchronous, and may not be used in an interrupt context.
+	 *
+	 * Only the hub driver or root-hub registrar should ever call this.
+	 *
+	 * Return: Whether the device is configured properly or not. Zero if the
+	 * interface was registered with the driver core; else a negative errno
+	 * value.
+	 *
+	 */
+	~~~
+- 이 주석을 보고 알 수 있는 내용을 정리하면 아래와 같다.
+	1. 이 함수의 호출 전에 이미 장치의 연결이 감지가 되었음.
+	2. 이 함수의 호출 전에 이미 usb_device가 생성되었으며 device descriptor는 읽을 수 있음.
+	3. 그러나 완전히 enumerate되지는 않았음. (여기서 enumerate라는 것은 device의 descriptor들을 받아오는 것을 뜻함)
+- 따라서 이 함수가 호출되기 전에 usb_device 구조체를 이용해서 descriptor들을 읽으려 해도 descriptor들이 완전히 enumerate 되지 않았기 때문에 device descriptor를 제외한 나머지 descriptor들의 정보(configuration, interface, endpoint)를 읽을 수 없다는 것을 알 수 있다.
+- 그리고 이 함수 내에서 나머지 descriptor들의 enumeration이 일어날 것이라고 유추할 수 있다.
+- 그러면 이제 usb_new_device()의 내부를 살펴보자.
+- usb_new_device()에서 announce_device()를 호출하는 형태는 아래와 같다
+	~~~
+	/* Tell the world! */
+	announce_device(udev);
+	~~~
+- 그리고 announce_device(udev) 에서 위로 가보면 아래와 같은 코드를 발견할 수 있다.
+	err = usb_enumerate_device(udev);	/* Read descriptors */
+- 이를 통해 알 수 있는 것은 usb_new_device()를 통해 udev로 넘어오는 usb_device 구조체는 device descriptor를 제외한 나머지 descriptor의 정보가 없는 상태이며 usb_new_device() 내에서 usb_enumerate_device()를 통해 나머지 descriptor들을 읽어온 후 announce_device()를 통해 읽어온 내용들을 출력한다는 것이다.
+- 그런데 usb_new_device()와 usb_alloc_dev()의 역할을 보면 usb_alloc_dev()로 usb_device 구조체 생성 후 usb_new_device()를 통해 enumeration을 하는 것이 자연스러워 보이며 dmesg의 출력 순서와도 일치한다. 
+- 이를 확인하기 위해 hub_port_connect()의 usb_alloc_dev() 이후의 코드를 따라가보았더니 함수의 마지막 부분에 아래와 같은 형태로 usb_new_device()의 호출을 확인할 수 있었다.
+	~~~
+	/* Run it through the hoops (find a driver, etc) */
+	if (!status) {
+		status = usb_new_device(udev);
+		if (status) {
+			mutex_lock(&usb_port_peer_mutex);
+			spin_lock_irq(&device_state_lock);
+			port_dev->child = NULL;
+			spin_unlock_irq(&device_state_lock);
+			mutex_unlock(&usb_port_peer_mutex);
+		} else {
+			if (hcd->usb_phy && !hdev->parent)
+				usb_phy_notify_connect(hcd->usb_phy, udev->speed);
+		}
+	}
+	~~~
+- 여기까지의 함수 호출 순서를 정리하면 다음과 같다.
+	~~~
+	hub_port_connect() // 포트 변화감지
+	{
+		usb_alloc_dev() // usb_device 생성
+		hub_port_init()
+		{
+			// new high-speed USB device number 2 using xhci_hcd 출력
+			dev_info(&udev->dev, "%s %s USB device number %d using %s\n", (udev->config) ? "reset" : "new", speed, devnum, udev->bus->controller->driver->name);
+		}
 
-그리고 usb_alloc_dev()의 주석을 보면 다음과 같다.
-/**
- * usb_alloc_dev - usb device constructor (usbcore-internal)
- * @parent: hub to which device is connected; null to allocate a root hub
- * @bus: bus used to access the device
- * @port1: one-based index of port; ignored for root hubs
- * Context: !in_interrupt()
- *
- * Only hub drivers (including virtual root hub drivers for host
- * controllers) should ever call this.
- *
- * This call may not be used in a non-sleeping context.
- *
- * Return: On success, a pointer to the allocated usb device. %NULL on
- * failure.
- */
-
-위 주석을 보면 usb 장치에 대한 구조체를 생성하는 함수이며 성공 시 할당된 usb 장치의 struct usb_device의 포인터를 반환한다고 되어있다.
-
-따라서 usb_alloc_dev()에서 struct usb_device를 생성한 후 hub_port_init()으로 넘겨주는 구조인 것을 확인할 수 있으며 usb_alloc_dev()가 usb_device 구조체를 생성하는 함수라는 것을 알 수 있다. 
-8. struct usb_device의 enumeration
-announce_device()는 usb_new_device()내에서 호출되며 함수 형태는 아래와 같다.
-(linux/drivers/usb/core/hub.c)
-int usb_new_device(struct usb_device *udev)
-
-usb_new_device()는 주석을 통해서 함수를 설명하고 있는데 그 내용은 다음과 같다.
-/**
- * usb_new_device - perform initial device setup (usbcore-internal)
- * @udev: newly addressed device (in ADDRESS state)
- *
- * This is called with devices which have been detected but not fully
- * enumerated.  The device descriptor is available, but not descriptors
- * for any device configuration.  The caller must have locked either
- * the parent hub (if udev is a normal device) or else the
- * usb_bus_idr_lock (if udev is a root hub).  The parent's pointer to
- * udev has already been installed, but udev is not yet visible through
- * sysfs or other filesystem code.
- *
- * This call is synchronous, and may not be used in an interrupt context.
- *
- * Only the hub driver or root-hub registrar should ever call this.
- *
- * Return: Whether the device is configured properly or not. Zero if the
- * interface was registered with the driver core; else a negative errno
- * value.
- *
- */
-
-이 주석을 보고 알 수 있는 내용을 정리하면 아래와 같다.
-1.	이 함수의 호출 전에 이미 장치의 연결이 감지가 되었음.
-2.	이 함수의 호출 전에 이미 usb_device가 생성되었으며 device descriptor는 읽을 수 있음.
-3.	그러나 완전히 enumerate되지는 않았음. (여기서 enumerate라는 것은 device의 descriptor들을 받아오는 것을 뜻함)
-
-따라서 이 함수가 호출되기 전에 usb_device 구조체를 이용해서 descriptor들을 읽으려 해도 descriptor들이 완전히 enumerate 되지 않았기 때문에 device descriptor를 제외한 나머지 descriptor들의 정보(configuration, interface, endpoint)를 읽을 수 없다는 것을 알 수 있다. 그리고 이 함수 내에서 나머지 descriptor들의 enumeration이 일어날 것이라고 유추할 수 있다.
-그러면 이제 usb_new_device()의 내부를 살펴보자.
-usb_new_device()에서 announce_device()를 호출하는 형태는 아래와 같다
-/* Tell the world! */
-announce_device(udev);
-
-그리고 announce_device(udev) 에서 위로 가보면 아래와 같은 코드를 발견할 수 있다.
-err = usb_enumerate_device(udev);	/* Read descriptors */
-
-이를 통해 알 수 있는 것은 usb_new_device()를 통해 udev로 넘어오는 usb_device 구조체는 device descriptor를 제외한 나머지 descriptor의 정보가 없는 상태이며 usb_new_device() 내에서 usb_enumerate_device()를 통해 나머지 descriptor들을 읽어온 후 announce_device()를 통해 읽어온 내용들을 출력한다는 것이다.
-
-그런데 usb_new_device()와 usb_alloc_dev()의 역할을 보면 usb_alloc_dev()로 usb_device 구조체 생성 후 usb_new_device()를 통해 enumeration을 하는 것이 자연스러워 보이며 dmesg의 출력 순서와도 일치한다.  이를 확인하기 위해 hub_port_connect()의 usb_alloc_dev() 이후의 코드를 따라가보았더니 함수의 마지막 부분에 아래와 같은 형태로 usb_new_device()의 호출을 확인할 수 있었다.
-/* Run it through the hoops (find a driver, etc) */
-if (!status) {
-status = usb_new_device(udev);
-if (status) {
-mutex_lock(&usb_port_peer_mutex);
-	  spin_lock_irq(&device_state_lock);
-	  port_dev->child = NULL;
-	  spin_unlock_irq(&device_state_lock);
-	  mutex_unlock(&usb_port_peer_mutex);
-} else {
-if (hcd->usb_phy && !hdev->parent)
-	      usb_phy_notify_connect(hcd->usb_phy, udev->speed);
-}
-}
-
- 
-여기까지의 함수 호출 순서를 정리하면 다음과 같다.
-hub_port_connect() // 포트 변화감지
-{
-usb_alloc_dev() // usb_device 생성
-hub_port_init()
-{
-// new high-speed USB device number 2 using xhci_hcd 출력
-dev_info(&udev->dev, "%s %s USB device number %d using %s\n", 
-(udev->config) ? "reset" : "new", speed, devnum,
-udev->bus->controller->driver->name);
-}
-
-usb_new_device()
-{
-usb_enumerate_device() // descriptor 읽어오기		
-	  announce_device()
-	  {
-	  /* 아래 메시지 출력
-	  New USB device found, idVendor=043e, idProduct=70d6, bcdDevice=11.00
-	  usb 1-2: New USB device strings: Mfr=1, Product=2, SerialNumber=3
-	  usb 1-2: Product: USB Flash Drive
-	  usb 1-2: Manufacturer: LG Electronics
-	  usb 1-2: SerialNumber: D41HGF07000000124
-	  */
-	  dev_info(&udev->dev, "New USB device found, idVendor=%04x,
-            idProduct=%04x, bcdDevice=%2x.%02x\n",
-	      le16_to_cpu(udev->descriptor.idVendor),
-	      le16_to_cpu(udev->descriptor.idProduct),
-	      bcdDevice >> 8, bcdDevice & 0xff);
-dev_info(&udev->dev, "New USB device strings: Mfr=%d, Product=%d,
-SerialNumber=%d\n",
-	      udev->descriptor.iManufacturer,
-	      udev->descriptor.iProduct,
-	      udev->descriptor.iSerialNumber);
-	      show_string(udev, "Product", udev->product);
-	      show_string(udev, "Manufacturer", udev->manufacturer);
-	      show_string(udev, "SerialNumber", udev->serial);
-	  }
-}
-}
-
+		usb_new_device()
+		{
+			usb_enumerate_device() // descriptor 읽어오기
+			announce_device()
+			{
+			/* 아래 메시지 출력
+			New USB device found, idVendor=043e, idProduct=70d6, bcdDevice=11.00
+			usb 1-2: New USB device strings: Mfr=1, Product=2, SerialNumber=3
+			usb 1-2: Product: USB Flash Drive
+			usb 1-2: Manufacturer: LG Electronics
+			usb 1-2: SerialNumber: D41HGF07000000124
+			*/
+			dev_info(&udev->dev, "New USB device found, idVendor=%04x, idProduct=%04x, bcdDevice=%2x.%02x\n", le16_to_cpu(udev->descriptor.idVendor), le16_to_cpu(udev->descriptor.idProduct), bcdDevice >> 8, bcdDevice & 0xff);
+			dev_info(&udev->dev, "New USB device strings: Mfr=%d, Product=%d, SerialNumber=%d\n", udev->descriptor.iManufacturer, udev->descriptor.iProduct, udev->descriptor.iSerialNumber);
+			show_string(udev, "Product", udev->product);
+			show_string(udev, "Manufacturer", udev->manufacturer);
+			show_string(udev, "SerialNumber", udev->serial);
+			}
+		}
+	}
+	~~~
 
  
 다시 usb_new_device()로 돌아가서 usb_enumerate_device()의 내부에서 descriptor를 enumeration하는 과정을 계속 살펴보자.
