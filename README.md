@@ -497,7 +497,7 @@
 	~~~
 	struct usb_device *usb_alloc_dev(struct usb_device *parent, struct usb_bus *bus, unsigned port1)
 	{
-	struct usb_device *dev;
+		struct usb_device *dev;
 
 		(생략)
 		if (unlikely(!parent)) {
@@ -546,7 +546,7 @@
 
 		return dev;
 	}
-	~~
+	~~~
 - 위의 소스의 흐름은 다음과 같다.
 	1. if(!parent)를 통해 roothub인지 roothub아래에 연결된 장치인지를 검사 (roothub라면 부모가 없으므로)
 	2. roothub라면 dev_set_name(&dev->dev, "usb%d", bus->busnum);를 통해 roothub 번호를 등록
@@ -610,14 +610,14 @@
 - 그 후 switch(dev->portnum)을 통해 port번호별로 device를 제한한다. 
 - 이 소스에서는 1번 roothub의 2, 9번 port를 각각 MASS STORAGE, HID에만 제한하도록 코드를 구성해서 if(dev->bus->busnum == 1), switch문에서의 case 2 :와 case 9 :와 같이 되어있다.
 - 만약 다른 roothub, port들을 제한하려면 위의 소스에서 번호를 수정한 후 다시 컴파일을 하고 해당 커널로 부팅을 해야 한다.
- 
+
 ## 11. 실험 및 결과
 	### 11.1 실험 순서
 		1. PC의 모든 port들에 usb장치들을 연결해보며 dmesg를 통해 커널이 roothub와 port들의 번호를 어떻게 매기고 있는지 확인한다.
 		2. 10절에서 수정한 linux/drivers/usb/core/config.c의 usb_parse_configuration()을 제한하고자 하는 roothub, port의 번호로 수정한 후 컴파일하고 해당 커널로 부팅한다. (여기서는 1번 roothub의 2번 port는 Mass storage, 9번 port는 HID로 제한했다.
 		3. 장치 class를 제한한 port에 usb장치를 연결 후 작동하는지 확인하고 dmesg를 통해 출력결과를 확인한다.
 
-	###11.2 실험 결과
+	### 11.2 실험 결과
 		- ![usb_result](./images/usb_result.png)
 		- 9번 port에 저장소용 usb를 연결한 후 2번 port에 마우스를 연결했을 때의 dmesg 출력 결과이다.
 		- 저장소용 usb는 인식이 되지 않았으며 마우스도 인식이 되지 않아서 작동이 불가능했다.
