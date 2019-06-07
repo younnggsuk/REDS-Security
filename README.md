@@ -2,7 +2,6 @@
 
 ## 1. 개요
 - REDS security의 operational protection 요구사항에 따라 460-network를 구성하는 장비의 connection point는 data source로의 연결에만 동작을 허가해야 하며 특히 USB 장치에 대해서는 USB device class 08h (USB mass storage)만 REDS에 사용할 수 있도록 해야 한다.
-
 - 따라서 리눅스 커널이 어떻게 연결된 USB 장치의 class를 인식하고 그에 맞는 디바이스 드라이버를 연결시키는지 이해하고 커널 소스를 수정하여 포트마다 지정된 USB device class에만 동작을 하도록 커널을 수정한다.
 - Linux ubuntu사용, 커널 버전 : 4.19.0-rc5+
 
@@ -49,7 +48,6 @@
 		__u8 iInterface;
 	}
 	~~~
-
 - 위 구조체의 필드중 bInterfaceClass가 USB 장치의 class를 나타내는 필드이며 이 필드에 들어가는 값들은 아래와 같이 정의되어 있다. (linux/include/uapi/linux/usb/ch9.h)
 	~~~
 	/*
@@ -78,7 +76,6 @@
 
 	#define USB_SUBCLASS_VENDOR_SPEC	0xff
 	~~~
-
 - 위의 정의된 값들 중 8번을 보면 USB_CLASS_MASS_STORAGE라고 되어있고 이 값이 표준 문서에 명시된 USB device class 08h(USB mass storage)에 해당한다는 것을 알 수 있다.
 - 따라서 연결되는 USB 장치의 Interface descriptor 구조체의 항목 중 bInterfaceClass 필드를 보고 USB_CLASS_MASS_STORAGE가 아니라면 연결을 허가하지 않도록 커널 코드를 수정하면 표준의 요구사항에 맞게 USB 장치를 제어할 수 있다는 것을 알 수 있다.
 
@@ -167,10 +164,9 @@
 ## 7. struct usb_device의 allocation
 - 위에서 설명한 함수중 hub_port_init()의 호출 위치를 따라가보면 hub_port_connect()가 나온다. (linux/drivers/usb/core/hub.c)
 - 그리고 이 함수 내에서 hub_port_init()을 호출하는 형태는 아래와 같다.
-		status = hub_port_init(hub, udev, port1, i);
-- 여기서 전달되는 인자 중 udev가 우리가 찾는 연결된 장치의 usb_device 구조체이다.
-- 그리고 위 코드에서 조금 위로 가보면 아래와 같은 코드가 있는 것을 확인할 수 있다.
-		udev = usb_alloc_dev(hdev, hdev->bus, port1);
+- status = hub_port_init(hub, udev, port1, i);
+- 여기서 전달되는 인자 중 udev가 우리가 찾는 연결된 장치의 usb_device 구조체이며, 위 코드에서 조금 위로 가보면 아래와 같은 코드가 있는 것을 확인할 수 있다.
+- udev = usb_alloc_dev(hdev, hdev->bus, port1);
 - 그리고 usb_alloc_dev()의 주석을 보면 다음과 같다.
 	~~~
 	/**
@@ -194,7 +190,7 @@
 
 ## 8. struct usb_device의 enumeration
 - announce_device()는 usb_new_device()내에서 호출되며 함수 형태는 아래와 같다. (linux/drivers/usb/core/hub.c)
-	int usb_new_device(struct usb_device *udev)
+- int usb_new_device(struct usb_device *udev)
 - usb_new_device()는 주석을 통해서 함수를 설명하고 있는데 그 내용은 다음과 같다.
 	~~~
 	/**
@@ -232,7 +228,9 @@
 	announce_device(udev);
 	~~~
 - 그리고 announce_device(udev) 에서 위로 가보면 아래와 같은 코드를 발견할 수 있다.
+	~~~
 	err = usb_enumerate_device(udev);	/* Read descriptors */
+	~~~
 - 이를 통해 알 수 있는 것은 usb_new_device()를 통해 udev로 넘어오는 usb_device 구조체는 device descriptor를 제외한 나머지 descriptor의 정보가 없는 상태이며 usb_new_device() 내에서 usb_enumerate_device()를 통해 나머지 descriptor들을 읽어온 후 announce_device()를 통해 읽어온 내용들을 출력한다는 것이다.
 - 그런데 usb_new_device()와 usb_alloc_dev()의 역할을 보면 usb_alloc_dev()로 usb_device 구조체 생성 후 usb_new_device()를 통해 enumeration을 하는 것이 자연스러워 보이며 dmesg의 출력 순서와도 일치한다. 
 - 이를 확인하기 위해 hub_port_connect()의 usb_alloc_dev() 이후의 코드를 따라가보았더니 함수의 마지막 부분에 아래와 같은 형태로 usb_new_device()의 호출을 확인할 수 있었다.
@@ -284,90 +282,88 @@
 		}
 	}
 	~~~
+- 다시 usb_new_device()로 돌아가서 usb_enumerate_device()의 내부에서 descriptor를 enumeration하는 과정을 계속 살펴보자.
+- usb_enumerate_device()의 코드를 보면 아래와 같이 다시 usb_get_configuration()을 통해 configuration을 받아오는 것을 확인할 수 있다.
+	~~~
+	static int usb_enumerate_device(struct usb_device *udev)
+	{
+		(생략)
+		if (udev->config == NULL) {
+			err = usb_get_configuration(udev);
+			if (err < 0) {
+				if (err != -ENODEV)
+					dev_err(&udev->dev, "can't read configurations, error %d\n", err);
 
- 
-다시 usb_new_device()로 돌아가서 usb_enumerate_device()의 내부에서 descriptor를 enumeration하는 과정을 계속 살펴보자.
-usb_enumerate_device()의 코드를 보면 아래와 같이 다시 usb_get_configuration()을 통해 configuration을 받아오는 것을 확인할 수 있다.
-static int usb_enumerate_device(struct usb_device *udev)
-{
-(생략)
-if (udev->config == NULL) {
-err = usb_get_configuration(udev);
-if (err < 0) {
-if (err != -ENODEV)
-dev_err(&udev->dev, "can't read configurations, error %d\n", err);
+				return err;
+				    }
+		}
+		(생략)
+	}
+	~~~
+- usb_get_configuration()는 configuration descriptor수만큼 usb_parse_configuration()을 호출한다. 
+- 코드는 아래와 같다. (linux/drivers/usb/core/config.c)
+	~~~
+	int usb_get_configuration(struct usb_device *dev)
+	{
+		(생략)
+		for (; cfgno < ncfg; cfgno++) {
+			(생략)	
+			result = usb_parse_configuration(dev, cfgno, &dev->config[cfgno], bigbuffer, length);
+			if (result < 0) {
+				++cfgno;
+				goto err;
+			}
+		}
+		result = 0;
 
-return err;
-	    }
-}
-(생략)
-}
+	err:
+		kfree(desc);
+		dev->descriptor.bNumConfigurations = cfgno;
+	err2:
+		if (result == -ENOMEM)
+			dev_err(ddev, "out of memory\n");
 
-usb_get_configuration()는 configuration descriptor수만큼 usb_parse_configuration()을 호출한다. 코드는 아래와 같다. (linux/drivers/usb/core/config.c)
-int usb_get_configuration(struct usb_device *dev)
-{
-(생략)
-for (; cfgno < ncfg; cfgno++) {
-(생략)	
-result = usb_parse_configuration(dev, cfgno,
-	  &dev->config[cfgno], bigbuffer, length);
-	  if (result < 0) {
-	      ++cfgno;
-	      goto err;
-	  }
-}
-result = 0;
+		return result;
+	}
+	~~~
+- 그리고 usb_parse_configuration()에서는 interface의 size만큼 usb_parse_interface()를 호출한다. 그리고 altsetting을 포함한 모든 interface들을 검사한다. 
+- 코드는 아래와 같다. (linux/drivers/usb/core/config.c)
+	~~~
+	static int usb_parse_configuration(struct usb_device *dev, int cfgidx, struct usb_host_config *config, unsigned char *buffer, int size)
+	{
+		(생략)
+		/* Parse all the interface/altsetting descriptors */
+		while (size > 0) {
+			retval = usb_parse_interface(ddev, cfgno, config, buffer, size, inums, nalts);
+			if (retval < 0)
+				return retval;
 
-err:
-kfree(desc);
-dev->descriptor.bNumConfigurations = cfgno;
-err2:
-if (result == -ENOMEM)
-dev_err(ddev, "out of memory\n");
+			buffer += retval;
+			size -= retval;
+		}
+		/* Check for missing altsettings */
+		for (i = 0; i < nintf; ++i) {
+			intfc = config->intf_cache[i];
+			for (j = 0; j < intfc->num_altsetting; ++j) {
+				for (n = 0; n < intfc->num_altsetting; ++n) {
+					if (intfc->altsetting[n].desc.bAlternateSetting == j)
+						break;
+				}
+				if (n >= intfc->num_altsetting)
+					dev_warn(ddev, "config %d interface %d has no altsetting %d\n", cfgno, inums[i], j);
+			}
+		}
+		return 0;
+	}
+	~~~
+- 여기까지의 코드를 통해 enumeration과정을 정리하면 다음과 같다. (Endpoint 부분은 생략)
+	1. usb_enumerate_device()에서 usb_get_configuration()을 호출한다.
+	2. usb_get_configuration()에서는 descriptor의 수만큼 모든 configuration descriptor마다  usb_parse_configuration()을 호출한다. (configuration descriptor enumeration 완료)
+	3. usb_parse_configuration()에서는 모든 descriptor 크기만큼 interface descriptor마다 usb_parse_interface()를 호출한다. (interface descriptor enumeration 완료)
+- 그런데 usb_parse_interface의 반복문 아래에 보면 altsetting을 포함한 모든 interface들을 enumerate한 후 마지막으로 interface전체를 돌면서 검사하는 반복문이 있는 것을 확인할 수 있다. (/* Check for missing altsettings */ 아래 부분)##
+- 따라서 여기서는 이 반복문을 이용해서 interface descriptor들을 돌면서 bInterfaceClass를 검사하며 장치 class를 제한하기로 한다.
 
-return result;
-}
-그리고 usb_parse_configuration()에서는 interface의 size만큼 usb_parse_interface()를 호출한다. 그리고 altsetting을 포함한 모든 interface들을 검사한다. 코드는 아래와 같다. (linux/drivers/usb/core/config.c)
-static int usb_parse_configuration(struct usb_device *dev, int cfgidx, 
-struct usb_host_config *config, unsigned char *buffer, int size)
-{
-(생략)
-/* Parse all the interface/altsetting descriptors */
-while (size > 0) {
-retval = usb_parse_interface(ddev, cfgno, config, buffer, size, 
-inums, nalts);
-	  if (retval < 0)
-	      return retval;
-
-buffer += retval;
-size -= retval;
-}
-/* Check for missing altsettings */
-for (i = 0; i < nintf; ++i) {
-intfc = config->intf_cache[i];
-	  for (j = 0; j < intfc->num_altsetting; ++j) {
-	      for (n = 0; n < intfc->num_altsetting; ++n) {
-	          if (intfc->altsetting[n].desc.bAlternateSetting == j)
-		      break;
-	       }
-	       if (n >= intfc->num_altsetting)
-	           dev_warn(ddev, "config %d interface %d has no "
-	                           "altsetting %d\n", cfgno, inums[i], j);
-	  }
-}
-return 0;
-}
-
-여기까지의 코드를 통해 enumeration과정을 정리하면 다음과 같다. (Endpoint 부분은 생략)
-1.	usb_enumerate_device()에서 usb_get_configuration()을 호출한다.
-2.	usb_get_configuration()에서는 descriptor의 수만큼 모든 configuration descriptor마다  usb_parse_configuration()을 호출한다.
-(configuration descriptor enumeration 완료)
-3.	usb_parse_configuration()에서는 모든 descriptor 크기만큼 interface descriptor마다 usb_parse_interface()를 호출한다. 
-(interface descriptor enumeration 완료)
- 
-그런데 usb_parse_interface의 반복문 아래에 보면 altsetting을 포함한 모든 interface들을 enumerate한 후 마지막으로 interface전체를 돌면서 검사하는 반복문이 있는 것을 확인할 수 있다 (/* Check for missing altsettings */ 아래 부분). 따라서 여기서는 이 반복문을 이용해서 interface descriptor들을 돌면서 bInterfaceClass를 검사하며 장치 class를 제한하기로 한다.
-
-9. USB 장치 class 제한
+## 9. USB 장치 class 제한
 USB 장치를 device class별로 제한하기 위해서는 장치가 연결된 후 장치의 interface descriptor 모두를 검사해야 한다. 여기서는 usb_parse_configuration()의 마지막에 있는 모든 interface descriptor들을 검사하는 코드에 class를 확인하는 코드를 추가하는 방식으로 검사를 수행했다.
 
 추가한 코드는 아래와 같다. 
