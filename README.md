@@ -1,15 +1,20 @@
 # REDS Security - Operational Protection
 
 ## 1. 개요
-#### REDS security의 operational protection 요구사항에 따라 460-network를 구성하는 장비의 connection point는 data source로의 연결에만 동작을 허가해야 하며 특히 USB 장치에 대해서는 USB device class 08h (USB mass storage)만 REDS에 사용할 수 있도록 해야 한다. 따라서 리눅스 커널이 어떻게 연결된 USB 장치의 class를 인식하고 그에 맞는 디바이스 드라이버를 연결시키는지 이해하고 커널 소스를 수정하여 포트마다 지정된 USB device class에만 동작을 하도록 커널을 수정한다. (Linux ubuntu사용, 커널 버전 : 4.19.0-rc5+)
+- REDS security의 operational protection 요구사항에 따라 460-network를 구성하는 장비의 connection point는 data source로의 연결에만 동작을 허가해야 하며 특히 USB 장치에 대해서는 USB device class 08h (USB mass storage)만 REDS에 사용할 수 있도록 해야 한다.
+- 따라서 리눅스 커널이 어떻게 연결된 USB 장치의 class를 인식하고 그에 맞는 디바이스 드라이버를 연결시키는지 이해하고 커널 소스를 수정하여 포트마다 지정된 USB device class에만 동작을 하도록 커널을 수정한다. (Linux ubuntu사용, 커널 버전 : 4.19.0-rc5+)
 
 ## 2. Linux의 USB Subsystem
-#### USB 장치가 물리적으로 연결되면 USB host controller라고 하는 하드웨어 장치에서 먼저 이를 감지한다. (USB host controller는 PCI장치와 같은 bus 장치이며 기본적으로 Root Hub라고 하는 허브가 물리적으로 연결되어 있다. 따라서 장치가 실제로 연결되는 위치는 Root Hub의 한 포트이다.) 그리고 이 host controller의 종류와 일치하는 host controller driver는 host controller의 물리 계층 정보를 가져와서 상위 USB 프로토콜 명세의 정보로 변환하고 USB core에 정보를 채워 놓는다. 이렇게 되면 커널 영역의 driver들은 이 USB core의 정보를 통해 실제 연결된 USB 장치의 정보에 접근할 수 있고 이들을 관리할 수 있게 된다. 
-![usbsubsystem](./images/usb_subsystem.png)
+- USB 장치가 물리적으로 연결되면 USB host controller라고 하는 하드웨어 장치에서 먼저 이를 감지한다. (USB host controller는 PCI장치와 같은 bus 장치이며 기본적으로 Root Hub라고 하는 허브가 물리적으로 연결되어 있다. 따라서 장치가 실제로 연결되는 위치는 Root Hub의 한 포트이다.)
+- 그리고 이 host controller의 종류와 일치하는 host controller driver는 host controller의 물리 계층 정보를 가져와서 상위 USB 프로토콜 명세의 정보로 변환하고 USB core에 정보를 채워 놓는다.
+- 이렇게 되면 커널 영역의 driver들은 이 USB core의 정보를 통해 실제 연결된 USB 장치의 정보에 접근할 수 있고 이들을 관리할 수 있게 된다.
+- ![usbsubsystem](./images/usb_subsystem.png)
 
 ## 3. USB Descriptors
-#### 모든 USB 장치는 USB descriptor를 통해 자신의 정보를 host에게 알려준다. USB descriptor의 종류는 Device Descriptor, Configuration Descriptor, Interface Descriptor, Endpoint Descriptor로 4가지가 있고 아래 그림과 같은 계층 구조를 가진다. 각 descriptor들은 구조체로 정의되어 있으며 상위 계층 descriptor 구조체에는 하위 계층 descriptor의 개수 정보를 가지고 있다. 
-![usbsubsystem](./images/usb_descriptors.png)
+- 모든 USB 장치는 USB descriptor를 통해 자신의 정보를 host에게 알려준다.
+- USB descriptor의 종류는 Device Descriptor, Configuration Descriptor, Interface Descriptor, Endpoint Descriptor로 4가지가 있고 아래 그림과 같은 계층 구조를 가진다.
+- 각 descriptor들은 구조체로 정의되어 있으며 상위 계층 descriptor 구조체에는 하위 계층 descriptor의 개수 정보를 가지고 있다. 
+- ![usbsubsystem](./images/usb_descriptors.png)
  
 
 ### 3.1 Device descriptor
