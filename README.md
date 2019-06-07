@@ -364,257 +364,252 @@
 - 따라서 여기서는 이 반복문을 이용해서 interface descriptor들을 돌면서 bInterfaceClass를 검사하며 장치 class를 제한하기로 한다.
 
 ## 9. USB 장치 class 제한
-USB 장치를 device class별로 제한하기 위해서는 장치가 연결된 후 장치의 interface descriptor 모두를 검사해야 한다. 여기서는 usb_parse_configuration()의 마지막에 있는 모든 interface descriptor들을 검사하는 코드에 class를 확인하는 코드를 추가하는 방식으로 검사를 수행했다.
-
-추가한 코드는 아래와 같다. 
-(linux/drivers/usb/core/config.c)
-static int usb_parse_configuration(struct usb_device *dev, int cfgidx, 
-struct usb_host_config *config, unsigned char *buffer, int size)
-{
-(생략)
-/* Check for missing altsettings */
-for (i = 0; i < nintf; ++i) {
-intfc = config->intf_cache[i];
-	  for (j = 0; j < intfc->num_altsetting; ++j) {
-// 수정한 코드 시작
-	      if(intfc->altsetting[n].desc.bInterfaceClass
-!= USB_CLASS_MASS_STORAGE)
-	      {
-	          dev_info(ddev, "MASS STORAGE DEVICE만 허용됩니다.\n");
-		  return -1;
-	      }
-	      break;
-	      // 수정한 코드 끝
-	      for (n = 0; n < intfc->num_altsetting; ++n) {
-	          if (intfc->altsetting[n].desc.bAlternateSetting == j)
-		      break;
-	       }
-	       if (n >= intfc->num_altsetting)
-	           dev_warn(ddev, "config %d interface %d has no "
-	                           "altsetting %d\n", cfgno, inums[i], j);
-	  }
-}
-return 0;
-}
-위와 같이 코드를 수정하게 되면 USB_CLASS_MASS_STORAGE가 아닐 경우 -1을 반환하게 된다. 여기서 -1이라는 값은 음의 값을 반환하기 위한 것이며 당장의 기능 구현에만 초점을 맞춘 것이다. (리눅스 커널의 errno.h에 정의된 것과 중복될 수 있는 점은 신경 쓰지 않았음)
-
-usb_parse_configuration()에서 -1을 반환하게 되면 usb_get_configuration()에서는 result에 -1이 들어가고 반복문 도중 goto err가 수행된다. err에서는 해당 configuration descriptor가 kfree를 통해 메모리 해제되고 usb_device의 configuration 수를 해당 configuration descriptor의 수까지 기록한다. 그리고 result를 usb_enumerate_device()에 반환하게 된다. 해당 코드는 아래와 같다.
-result = usb_parse_configuration(dev, cfgno,
-	&dev->config[cfgno], bigbuffer, length);
-if (result < 0) {
-	++cfgno;
-	goto err;
-}
-
-err:
-	kfree(desc);
-	dev->descriptor.bNumConfigurations = cfgno;
-err2:
-	if (result == -ENOMEM)
-		dev_err(ddev, "out of memory\n");
-
-	return result;
-
-usb_get_configuration()에서 -1을 반환하게 되면 usb_enumerate_device()에서는 err에 -1이 들어가고 "can't read configurations, error -1"을 출력하고 err를 usb_new_device()로 반환하게 된다. 해당 코드는 아래와 같다.
-if (udev->config == NULL) {
-	err = usb_get_configuration(udev);
-	if (err < 0) {
-		if (err != -ENODEV)
-			dev_err(&udev->dev, "can't read configurations, error %d\n", err);
-		return err;
-	}
-}
-
- 
-usb_enumerate_device()에서 -1을 반환하게 되면 usb_new_device()에서는 err에 -1이 들어가고 if문을 만나 goto fail이 수행된다. fail내에서는 해당 usb_device와 해당 interface 모두를 USB_STATE_NOTATTACHED로 바꾼 후 런타임 전원 설정을 중단한 후 err을 반환한다.
-err = usb_enumerate_device(udev);	/* Read descriptors */
-if (err < 0)
-goto fail;
-(생략)
-fail:
-usb_set_device_state(udev, USB_STATE_NOTATTACHED);
-pm_runtime_disable(&udev->dev);
-pm_runtime_set_suspended(&udev->dev);
-return err;
-
-usb_new_device()에서 -1을 반환하게 되면 hub_port_connect()에서는 status에 -1이 들어가고 else문을 타게되어서 usb_phy_notify_connect()가 수행되어 host controller에 연결된 device를 다시 연결 시도하게 된다. 그리고 hub_power_remaining()을 호출하여 이 모든 과정을 다시 한번 수행한 후 return하게 된다. 따라서 총 4번 수행되는 셈이다. 해당 코드는 다음과 같다.
-if (!status) {
-status = usb_new_device(udev);
-if (status) {
-mutex_lock(&usb_port_peer_mutex);
-	  spin_lock_irq(&device_state_lock);
-	  port_dev->child = NULL;
-	  spin_unlock_irq(&device_state_lock);
-	  mutex_unlock(&usb_port_peer_mutex);
-} else {
-if (hcd->usb_phy && !hdev->parent)
-usb_phy_notify_connect(hcd->usb_phy,
-	  udev->speed);
-}
-}
-if (status)
-goto loop_disable;
-
-status = hub_power_remaining(hub);
-
-if (status)
-dev_dbg(hub->intfdev, "%dmA power budget left\n", status);
-
-return;
-
-위의 내용을 정리하면 다음과 같다.
-1.	usb_parse_configuration()에서 device class 확인 후 허가되지 않은 class의 interface descriptor 발견
-2.	usb_parse_configuration()에서 usb_get_configuration()로 -1 반환
-3.	usb_get_configuration()에서 해당 configuration descriptor를 kfree(메모리해제)한 후 usb_enumerate_device()로 -1 반환
-4.	usb_enumerate_device()에서 "can't read configurations, error -1" 출력 후 usb_new_device()로 -1 반환
-5.	usb_new_device()에서 장치 상태 USB_STATE_NOTATTACHED로 한 후 hub_port_connect()로 -1 반환
-6.	hub_port_connect()에서 추가로 3번 재 연결 시도 후 종료
-
-10. port별 USB 장치 class 제한
-문서의 요구사항에 따르면 port별로 class를 제한해야 하므로 위의 코드에 추가로 port를 구분하는 부분이 추가되어야 한다. 먼저 dmesg를 통해 PC의 각 port에 연결을 했을 때의 메시지를 확인해보면 다음과 같다.
-usb 3-1: new low-speed USB device number 2 using xhci_hcd
-usb 3-2: new low-speed USB device number 3 using xhci_hcd
-usb 1-2: new high-speed USB device number 2 using xhci_hcd
-
-이들 출력의 제일 왼쪽부분을 보면 usb x-y와 같은 형태로 출력이 되는 것을 확인할 수 있다. 여기서 x는 roothub(host controller)를 뜻하고 y는 roothub의 각 port들이다. 그렇다면 위의 출력을 하는 함수를 찾아가서 출력하는 부분을 살펴보면 어떻게 roothub와 각 port의 번호를 알아내는지 알 수 있을 것이다. 
- 
-위의 출력은 2절에서 살펴본 announce_device()의 내부에서 dev_info()를 통해 출력이 되며 해당 코드는 아래와 같다.
-dev_info(&udev->dev, "New USB device found, idVendor=%04x, idProduct=%04x, bcdDevice=%2x.%02x\n", 
-le16_to_cpu(udev->descriptor.idVendor),
-le16_to_cpu(udev->descriptor.idProduct),
-bcdDevice >> 8, bcdDevice & 0xff);
-
- 
-dev_info()는 Linux 커널에서 장치에 대한 기본적인 구조체인 struct device(struct usb_device와 다름, 모든 유형의 장치에 대한 구조체)의 주소를 첫번째 인자로 받아서 해당 장치의 정보를 받고, 장치 정보와 함께 printk()처럼 출력을 하는 형태인 것을 알 수 있다. 그렇다면 여기서 인자로 전달되어서 해당 장치의 정보를 받아오는데 사용된 struct device에 어떻게 roothub와 port번호를 등록했는지를 살펴보자.
- 
-struct device는 7절에서 에서 struct  usb_device를 생성하는 함수라고 설명했던 usb_alloc_dev()에서 생성, 초기화되며 roothub와 port의 정보를 등록하는 부분의 소스 코드 부분을 보면 아래와 같다. (linux/drivers/usb/core/usb.c)
- 
-struct usb_device *usb_alloc_dev(struct usb_device *parent,
-				 struct usb_bus *bus, unsigned port1)
-{
-struct usb_device *dev;
-
-	(생략)
-	if (unlikely(!parent)) {
-		  // 부모가 없을 때 (roothub일 때)
-		  dev->devpath[0] = '0';
-	    dev->route = 0;
- 
-		  dev->dev.parent = bus->controller;
-		  device_set_of_node_from_dev(&dev->dev, bus->sysdev);
-		  dev_set_name(&dev->dev, "usb%d", bus->busnum);
-		  root_hub = 1;
-	} else {
-		  // 부모가 있을 때 (roothub가 아닐 때)
-		  /* match any labeling on the hubs; it's one-based */
-		  if (parent->devpath[0] == '0') {
-		      snprintf(dev->devpath, sizeof dev->devpath, "%d", port1);
-		      /* Root ports are not counted in route string */
-		      dev->route = 0;
-		} else {
-		      snprintf(dev->devpath, sizeof dev->devpath,
-				    "%s.%d", parent->devpath, port1);
-		      /* Route string assumes hubs have less than 16 ports */
-		      if (port1 < 15)
-		          dev->route = parent->route + 
-(port1 << ((parent->level - 1)*4));
-		      else
-			  dev->route = parent->route +
-				  (15 << ((parent->level - 1)*4));
+- USB 장치를 device class별로 제한하기 위해서는 장치가 연결된 후 장치의 interface descriptor 모두를 검사해야 한다.
+- 여기서는 usb_parse_configuration()의 마지막에 있는 모든 interface descriptor들을 검사하는 코드에 class를 확인하는 코드를 추가하는 방식으로 검사를 수행했다.
+- 추가한 코드는 아래와 같다. (linux/drivers/usb/core/config.c)
+	~~~
+	static int usb_parse_configuration(struct usb_device *dev, int cfgidx, struct usb_host_config *config, unsigned char *buffer, int size)
+	{
+		(생략)
+		/* Check for missing altsettings */
+		for (i = 0; i < nintf; ++i) {
+			intfc = config->intf_cache[i];
+			for (j = 0; j < intfc->num_altsetting; ++j) {
+				// 수정한 코드 시작
+			    if(intfc->altsetting[n].desc.bInterfaceClass != USB_CLASS_MASS_STORAGE)
+			    {
+					dev_info(ddev, "MASS STORAGE DEVICE만 허용됩니다.\n");
+					return -1;
+			    }
+			    break;
+			    // 수정한 코드 끝
+			    for (n = 0; n < intfc->num_altsetting; ++n) {
+					if (intfc->altsetting[n].desc.bAlternateSetting == j)
+						break;
+					}
+			    if (n >= intfc->num_altsetting)
+					dev_warn(ddev, "config %d interface %d has no altsetting %d\n", cfgno, inums[i], j);
+			}
 		}
- 
-dev->dev.parent = &parent->dev;
-dev_set_name(&dev->dev, "%d-%s", bus->busnum, dev->devpath);
- 
-		if (!parent->parent) {
-		    /* device under root hub's port */
-		    raw_port = usb_hcd_find_raw_port_number(usb_hcd, port1);
-		  }
-		  dev->dev.of_node = usb_of_get_device_node(parent, raw_port);
- 
-		  /* hub driver sets up TT records */
+		return 0;
+	}
+	~~~
+- 위와 같이 코드를 수정하게 되면 USB_CLASS_MASS_STORAGE가 아닐 경우 -1을 반환하게 된다.
+- 여기서 -1이라는 값은 음의 값을 반환하기 위한 것이며 당장의 기능 구현에만 초점을 맞춘 것이다. (리눅스 커널의 errno.h에 정의된 것과 중복될 수 있는 점은 신경 쓰지 않았음)
+- usb_parse_configuration()에서 -1을 반환하게 되면 usb_get_configuration()에서는 result에 -1이 들어가고 반복문 도중 goto err가 수행된다.
+- err에서는 해당 configuration descriptor가 kfree를 통해 메모리 해제되고 usb_device의 configuration 수를 해당 configuration descriptor의 수까지 기록한다.
+- 그리고 result를 usb_enumerate_device()에 반환하게 된다. 
+- 해당 코드는 아래와 같다.
+	~~~
+	result = usb_parse_configuration(dev, cfgno, &dev->config[cfgno], bigbuffer, length);
+	if (result < 0) {
+		++cfgno;
+		goto err;
 	}
 
-	(생략)
+	err:
+		kfree(desc);
+		dev->descriptor.bNumConfigurations = cfgno;
+	err2:
+		if (result == -ENOMEM)
+			dev_err(ddev, "out of memory\n");
 
-	dev->portnum = port1;
-	dev->bus = bus;
+		return result;
+	~~~
+- usb_get_configuration()에서 -1을 반환하게 되면 usb_enumerate_device()에서는 err에 -1이 들어가고 "can't read configurations, error -1"을 출력하고 err를 usb_new_device()로 반환하게 된다.
+- 해당 코드는 아래와 같다.
+	~~~
+	if (udev->config == NULL) {
+		err = usb_get_configuration(udev);
+		if (err < 0) {
+			if (err != -ENODEV)
+				dev_err(&udev->dev, "can't read configurations, error %d\n", err);
+			return err;
+		}
+	}
+	~~~
+- usb_enumerate_device()에서 -1을 반환하게 되면 usb_new_device()에서는 err에 -1이 들어가고 if문을 만나 goto fail이 수행된다.
+- fail내에서는 해당 usb_device와 해당 interface 모두를 USB_STATE_NOTATTACHED로 바꾼 후 런타임 전원 설정을 중단한 후 err을 반환한다.
+	~~~
+		err = usb_enumerate_device(udev);	/* Read descriptors */
+		if (err < 0)
+			goto fail;
+		(생략)
+	fail:
+		usb_set_device_state(udev, USB_STATE_NOTATTACHED);
+		pm_runtime_disable(&udev->dev);
+		pm_runtime_set_suspended(&udev->dev);
+		return err;
+	~~~
+- usb_new_device()에서 -1을 반환하게 되면 hub_port_connect()에서는 status에 -1이 들어가고 else문을 타게되어서 usb_phy_notify_connect()가 수행되어 host controller에 연결된 device를 다시 연결 시도하게 된다.
+- 그리고 hub_power_remaining()을 호출하여 이 모든 과정을 다시 한번 수행한 후 return하게 된다. 따라서 총 4번 수행되는 셈이다.
+- 해당 코드는 다음과 같다.
+	~~~
+	if (!status) {
+		status = usb_new_device(udev);
+		if (status) {
+			mutex_lock(&usb_port_peer_mutex);
+			spin_lock_irq(&device_state_lock);
+			port_dev->child = NULL;
+			spin_unlock_irq(&device_state_lock);
+			mutex_unlock(&usb_port_peer_mutex);
+		} else {
+		if (hcd->usb_phy && !hdev->parent)
+			usb_phy_notify_connect(hcd->usb_phy, udev->speed);
+		}
+	}
+	if (status)
+		goto loop_disable;
 
-	(생략)
+	status = hub_power_remaining(hub);
 
-	return dev;
-}
+	if (status)
+		dev_dbg(hub->intfdev, "%dmA power budget left\n", status);
 
-위의 소스의 흐름은 다음과 같다.
-1.	if(!parent)를 통해 roothub인지 roothub아래에 연결된 장치인지를 검사 (roothub라면 부모가 없으므로)
-2.	roothub라면 dev_set_name(&dev->dev, "usb%d", bus->busnum);를 통해 roothub 번호를 등록
-3.	roothub가 아닌 경우에는 먼저 devpath가 비었다면 snprintf(dev->devpath, sizeof dev->devpath, "%d", port1);를 통해 port번호 등록, devpath가 비지 않았다면 snprintf(dev->devpath, sizeof dev->devpath, "%s.%d", parent->devpath, port1);를 통해 devpath에 이어지는 경로 등록한 후 dev_set_name(&dev->dev, "%d-%s", bus->busnum, dev->devpath);를 통해 roothub번호와 전체 경로를 등록
-4.	dev->portnum = port1;을 통해 port번호 등록 (전체 경로와 별도로 PC의 port를 등록)
-5.	dev->bus = bus;를 통해 버스 등록 (roothub정보 등록)
- 
-따라서 위의 과정을 통해 우리가 알 수 있는 것은 아래와 같다.
-1.	roothub(host controller)를 검사하는 방법은 if(!parent)와 같이 parent를 확인하면 된다.
-2.	roothub 번호는 usb_device의 bus->busnum을 통해 확인할 수 있다.
-3.	port번호는 usb_device의 portnum을 통해 확인할 수 있다. (PC에 물리적으로 붙어있는 port번호, host controller인 roothub에 물리적으로 붙어있는 port의 번호를 말함)
-위 내용을 통해 9절에서 수정한 코드에 port별로 제어하는 코드를 추가하면 아래와 같다.
-static int usb_parse_configuration(struct usb_device *dev, int cfgidx, 
-struct usb_host_config *config, unsigned char *buffer, int size)
-{
-(생략)
-/* Check for missing altsettings */
-for (i = 0; i < nintf; ++i) {
-intfc = config->intf_cache[i];
-	  for (j = 0; j < intfc->num_altsetting; ++j) {
-// 수정한 코드 시작
-	  if(dev->parent) // 부모가 있을 때(root hub는 제외)
-{
-	      if(dev->bus->busnum == 1)
-		  {
-		      switch(dev->portnum)
-	          {
-		          case 2 :
-			      if(intfc->altsetting[n].desc.bInterfaceClass
-!= USB_CLASS_MASS_STORAGE)
-			      {
-			          dev_info(ddev, "포트 %d에는 ”
-“MASS STORAGE DEVICE만 허용됩니다.\n",
-dev->portnum);
-				  return -1;
-			      }
-			      break;
-						
-			  case 9 :
-			      if(intfc->altsetting[n].desc.bInterfaceClass
-!= USB_CLASS_HID)	
-			      {
-			          dev_info(ddev, "포트 %d에는 ” 
-“HUMAN INTERFACE DEVICE만 허용됩니다.\n",
- dev->portnum);
-			          return -1;
-			      }
-		              break;
-		      }
-	      }
-	  }
-	      // 수정한 코드 끝
+	return;
+	~~~
+- 위의 내용을 정리하면 다음과 같다.
+	1. usb_parse_configuration()에서 device class 확인 후 허가되지 않은 class의 interface descriptor 발견
+	2. usb_parse_configuration()에서 usb_get_configuration()로 -1 반환
+	3. usb_get_configuration()에서 해당 configuration descriptor를 kfree(메모리해제)한 후 usb_enumerate_device()로 -1 반환
+	4. usb_enumerate_device()에서 "can't read configurations, error -1" 출력 후 usb_new_device()로 -1 반환
+	5. usb_new_device()에서 장치 상태 USB_STATE_NOTATTACHED로 한 후 hub_port_connect()로 -1 반환
+	6. hub_port_connect()에서 추가로 3번 재 연결 시도 후 종료
 
-	      for (n = 0; n < intfc->num_altsetting; ++n) {
-	          if (intfc->altsetting[n].desc.bAlternateSetting == j)
-		      break;
-	      }
-	      if (n >= intfc->num_altsetting)
-	          dev_warn(ddev, "config %d interface %d has no "
-	                           "altsetting %d\n", cfgno, inums[i], j);
-	      }
-}
+## 10. port별 USB 장치 class 제한
+- 문서의 요구사항에 따르면 port별로 class를 제한해야 하므로 위의 코드에 추가로 port를 구분하는 부분이 추가되어야 한다.
+- 먼저 dmesg를 통해 PC의 각 port에 연결을 했을 때의 메시지를 확인해보면 다음과 같다.
+	~~~
+	usb 3-1: new low-speed USB device number 2 using xhci_hcd
+	usb 3-2: new low-speed USB device number 3 using xhci_hcd
+	usb 1-2: new high-speed USB device number 2 using xhci_hcd
+	~~~
+- 이들 출력의 제일 왼쪽부분을 보면 usb x-y와 같은 형태로 출력이 되는 것을 확인할 수 있다. 
+- 여기서 x는 roothub(host controller)를 뜻하고 y는 roothub의 각 port들이다.
+- 그렇다면 위의 출력을 하는 함수를 찾아가서 출력하는 부분을 살펴보면 어떻게 roothub와 각 port의 번호를 알아내는지 알 수 있을 것이다. 
+-위의 출력은 2절에서 살펴본 announce_device()의 내부에서 dev_info()를 통해 출력이 되며 해당 코드는 아래와 같다.
+	~~~
+	dev_info(&udev->dev, "New USB device found, idVendor=%04x, idProduct=%04x, bcdDevice=%2x.%02x\n", le16_to_cpu(udev->descriptor.idVendor), le16_to_cpu(udev->descriptor.idProduct), bcdDevice >> 8, bcdDevice & 0xff);
+	~~~
+- dev_info()는 Linux 커널에서 장치에 대한 기본적인 구조체인 struct device(struct usb_device와 다름, 모든 유형의 장치에 대한 구조체)의 주소를 첫번째 인자로 받아서 해당 장치의 정보를 받고, 장치 정보와 함께 printk()처럼 출력을 하는 형태인 것을 알 수 있다.
+- 그렇다면 여기서 인자로 전달되어서 해당 장치의 정보를 받아오는데 사용된 struct device에 어떻게 roothub와 port번호를 등록했는지를 살펴보자.
+- struct device는 7절에서 에서 struct  usb_device를 생성하는 함수라고 설명했던 usb_alloc_dev()에서 생성, 초기화되며 roothub와 port의 정보를 등록하는 부분의 소스 코드 부분을 보면 아래와 같다. (linux/drivers/usb/core/usb.c)
+	~~~
+	struct usb_device *usb_alloc_dev(struct usb_device *parent, struct usb_bus *bus, unsigned port1)
+	{
+	struct usb_device *dev;
 
-return 0;
-}
- 
-먼저 dev->parent를 통해 roothub인지 검사한다. 여기서 roothub를 검사하는 이유는 host controller(roothub)자체도 interface class를 hub로 가지므로 roothub까지 막아버리면 안되기 때문이다. 그리고 roothub가 아니라는 것을 확인한 후에는 dev->bus->busnum을 통해 roothub의 번호를 검사한다. 그 후 switch(dev->portnum)을 통해 port번호별로 device를 제한한다. 
- 
-이 소스에서는 1번 roothub의 2, 9번 port를 각각 MASS STORAGE, HID에만 제한하도록 코드를 구성해서 if(dev->bus->busnum == 1), switch문에서의 case 2 :와 case 9 :와 같이 되어있다. 만약 다른 roothub, port들을 제한하려면 위의 소스에서 번호를 수정한 후 다시 컴파일을 하고 해당 커널로 부팅을 해야 한다.
+		(생략)
+		if (unlikely(!parent)) {
+			// 부모가 없을 때 (roothub일 때)
+			dev->devpath[0] = '0';
+			dev->route = 0;
 
+			dev->dev.parent = bus->controller;
+			device_set_of_node_from_dev(&dev->dev, bus->sysdev);
+			dev_set_name(&dev->dev, "usb%d", bus->busnum);
+			root_hub = 1;
+		} else {
+			// 부모가 있을 때 (roothub가 아닐 때)
+			/* match any labeling on the hubs; it's one-based */
+			if (parent->devpath[0] == '0') {
+				snprintf(dev->devpath, sizeof dev->devpath, "%d", port1);
+				/* Root ports are not counted in route string */
+				dev->route = 0;
+			} else {
+				snprintf(dev->devpath, sizeof dev->devpath, "%s.%d", parent->devpath, port1);
+				/* Route string assumes hubs have less than 16 ports */
+				if (port1 < 15)
+					dev->route = parent->route + (port1 << ((parent->level - 1)*4));
+				else
+					dev->route = parent->route + (15 << ((parent->level - 1)*4));
+			}
+			
+			dev->dev.parent = &parent->dev;
+			dev_set_name(&dev->dev, "%d-%s", bus->busnum, dev->devpath);
+
+			if (!parent->parent) {
+				/* device under root hub's port */
+				raw_port = usb_hcd_find_raw_port_number(usb_hcd, port1);
+			}
+			dev->dev.of_node = usb_of_get_device_node(parent, raw_port);
+			
+			/* hub driver sets up TT records */
+		}
+
+		(생략)
+
+		dev->portnum = port1;
+		dev->bus = bus;
+
+		(생략)
+
+		return dev;
+	}
+	~~
+- 위의 소스의 흐름은 다음과 같다.
+	1. if(!parent)를 통해 roothub인지 roothub아래에 연결된 장치인지를 검사 (roothub라면 부모가 없으므로)
+	2. roothub라면 dev_set_name(&dev->dev, "usb%d", bus->busnum);를 통해 roothub 번호를 등록
+	3. roothub가 아닌 경우에는 먼저 devpath가 비었다면 snprintf(dev->devpath, sizeof dev->devpath, "%d", port1);를 통해 port번호 등록, devpath가 비지 않았다면 snprintf(dev->devpath, sizeof dev->devpath, "%s.%d", parent->devpath, port1);를 통해 devpath에 이어지는 경로 등록한 후 dev_set_name(&dev->dev, "%d-%s", bus->busnum, dev->devpath);를 통해 roothub번호와 전체 경로를 등록
+	4. dev->portnum = port1;을 통해 port번호 등록 (전체 경로와 별도로 PC의 port를 등록)
+	5. dev->bus = bus;를 통해 버스 등록 (roothub정보 등록)
+- 따라서 위의 과정을 통해 우리가 알 수 있는 것은 아래와 같다.
+	1. roothub(host controller)를 검사하는 방법은 if(!parent)와 같이 parent를 확인하면 된다.
+	2. roothub 번호는 usb_device의 bus->busnum을 통해 확인할 수 있다.
+	3. port번호는 usb_device의 portnum을 통해 확인할 수 있다. (PC에 물리적으로 붙어있는 port번호, host controller인 roothub에 물리적으로 붙어있는 port의 번호를 말함)
+- 위 내용을 통해 9절에서 수정한 코드에 port별로 제어하는 코드를 추가하면 아래와 같다.
+	~~~
+	static int usb_parse_configuration(struct usb_device *dev, int cfgidx, struct usb_host_config *config, unsigned char *buffer, int size)
+	{
+		(생략)
+		/* Check for missing altsettings */
+		for (i = 0; i < nintf; ++i) {
+			intfc = config->intf_cache[i];
+			for (j = 0; j < intfc->num_altsetting; ++j) {
+			// 수정한 코드 시작
+			if(dev->parent) // 부모가 있을 때(root hub는 제외)
+			{
+				if(dev->bus->busnum == 1)
+				{
+					switch(dev->portnum)
+					{
+						case 2 :
+							if(intfc->altsetting[n].desc.bInterfaceClass != USB_CLASS_MASS_STORAGE)
+							{
+								dev_info(ddev, "포트 %d에는 MASS STORAGE DEVICE만 허용됩니다.\n", dev->portnum);
+								return -1;
+						  	}
+						  	break;
+
+					  	case 9 :
+							if(intfc->altsetting[n].desc.bInterfaceClass != USB_CLASS_HID)	
+						  	{
+								dev_info(ddev, "포트 %d에는 HUMAN INTERFACE DEVICE만 허용됩니다.\n", dev->portnum);
+							  	return -1;
+						  	}
+							break;
+					}
+				}
+			}
+			// 수정한 코드 끝
+
+			for (n = 0; n < intfc->num_altsetting; ++n) {
+				if (intfc->altsetting[n].desc.bAlternateSetting == j)
+					break;
+			}
+			if (n >= intfc->num_altsetting) {
+				dev_warn(ddev, "config %d interface %d has no altsetting %d\n", cfgno, inums[i], j);
+			}
+		}
+
+		return 0;
+	}
+	~~~
+- 먼저 dev->parent를 통해 roothub인지 검사한다. 여기서 roothub를 검사하는 이유는 host controller(roothub)자체도 interface class를 hub로 가지므로 roothub까지 막아버리면 안되기 때문이다. 
+- 그리고 roothub가 아니라는 것을 확인한 후에는 dev->bus->busnum을 통해 roothub의 번호를 검사한다.
+- 그 후 switch(dev->portnum)을 통해 port번호별로 device를 제한한다. 
+- 이 소스에서는 1번 roothub의 2, 9번 port를 각각 MASS STORAGE, HID에만 제한하도록 코드를 구성해서 if(dev->bus->busnum == 1), switch문에서의 case 2 :와 case 9 :와 같이 되어있다.
+- 만약 다른 roothub, port들을 제한하려면 위의 소스에서 번호를 수정한 후 다시 컴파일을 하고 해당 커널로 부팅을 해야 한다.
  
 11. 실험 및 결과
 11.1 실험 순서
