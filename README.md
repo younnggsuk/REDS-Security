@@ -2,6 +2,7 @@
 
 ## 1. 개요
 - REDS security의 operational protection 요구사항에 따라 460-network를 구성하는 장비의 connection point는 data source로의 연결에만 동작을 허가해야 하며 특히 USB 장치에 대해서는 USB device class 08h (USB mass storage)만 REDS에 사용할 수 있도록 해야 한다.
+
 - 따라서 리눅스 커널이 어떻게 연결된 USB 장치의 class를 인식하고 그에 맞는 디바이스 드라이버를 연결시키는지 이해하고 커널 소스를 수정하여 포트마다 지정된 USB device class에만 동작을 하도록 커널을 수정한다.
 - Linux ubuntu사용, 커널 버전 : 4.19.0-rc5+
 
@@ -166,10 +167,10 @@
 ## 7. struct usb_device의 allocation
 - 위에서 설명한 함수중 hub_port_init()의 호출 위치를 따라가보면 hub_port_connect()가 나온다. (linux/drivers/usb/core/hub.c)
 - 그리고 이 함수 내에서 hub_port_init()을 호출하는 형태는 아래와 같다.
-	status = hub_port_init(hub, udev, port1, i);
+		status = hub_port_init(hub, udev, port1, i);
 - 여기서 전달되는 인자 중 udev가 우리가 찾는 연결된 장치의 usb_device 구조체이다.
 - 그리고 위 코드에서 조금 위로 가보면 아래와 같은 코드가 있는 것을 확인할 수 있다.
-	udev = usb_alloc_dev(hdev, hdev->bus, port1);
+		udev = usb_alloc_dev(hdev, hdev->bus, port1);
 - 그리고 usb_alloc_dev()의 주석을 보면 다음과 같다.
 	~~~
 	/**
