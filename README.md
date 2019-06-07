@@ -9,13 +9,13 @@
 - USB 장치가 물리적으로 연결되면 USB host controller라고 하는 하드웨어 장치에서 먼저 이를 감지한다. (USB host controller는 PCI장치와 같은 bus 장치이며 기본적으로 Root Hub라고 하는 허브가 물리적으로 연결되어 있다. 따라서 장치가 실제로 연결되는 위치는 Root Hub의 한 포트이다.)
 - 그리고 이 host controller의 종류와 일치하는 host controller driver는 host controller의 물리 계층 정보를 가져와서 상위 USB 프로토콜 명세의 정보로 변환하고 USB core에 정보를 채워 놓는다.
 - 이렇게 되면 커널 영역의 driver들은 이 USB core의 정보를 통해 실제 연결된 USB 장치의 정보에 접근할 수 있고 이들을 관리할 수 있게 된다.
-	![usb_subsystem](./images/usb_subsystem.png)
+- ![usb_subsystem](./images/usb_subsystem.png)
 
 ## 3. USB Descriptors
 - 모든 USB 장치는 USB descriptor를 통해 자신의 정보를 host에게 알려준다.
 - USB descriptor의 종류는 Device Descriptor, Configuration Descriptor, Interface Descriptor, Endpoint Descriptor로 4가지가 있고 아래 그림과 같은 계층 구조를 가진다.
 - 각 descriptor들은 구조체로 정의되어 있으며 상위 계층 descriptor 구조체에는 하위 계층 descriptor의 개수 정보를 가지고 있다. 
-	![usb_descriptors](./images/usb_descriptors.png)
+- ![usb_descriptors](./images/usb_descriptors.png)
  
 	### 3.1 Device descriptor
 	- Device descriptor에는 지원되는 USB 버전, Product ID, Vendor ID, 그리고 configuration descriptor의 수 등의 정보가 있다.
@@ -58,8 +58,8 @@
 	 * as found in bDeviceClass or bInterfaceClass
 	 * and defined by www.usb.org documents
 	 */
-	#define USB_CLASS_PER_INTERFACE		0	/* for DeviceClass */
-	#define USB_CLASS_AUDIO			1
+	#define USB_CLASS_PER_INTERFACE	0	/* for DeviceClass */
+	#define USB_CLASS_AUDIO		1
 	#define USB_CLASS_COMM			2
 	#define USB_CLASS_HID			3
 	#define USB_CLASS_PHYSICAL		5
@@ -68,9 +68,9 @@
 	#define USB_CLASS_MASS_STORAGE		8
 	#define USB_CLASS_HUB			9
 	#define USB_CLASS_CDC_DATA		0x0a
-	#define USB_CLASS_CSCID			0x0b	/* chip+ smart card */
+	#define USB_CLASS_CSCID		0x0b	/* chip+ smart card */
 	#define USB_CLASS_CONTENT_SEC		0x0d	/* content security */
-	#define USB_CLASS_VIDEO			0x0e
+	#define USB_CLASS_VIDEO		0x0e
 	#define USB_CLASS_WIRELESS_CONTROLLER	0xe0
 	#define USB_CLASS_MISC			0xef
 	#define USB_CLASS_APP_SPEC		0xfe
