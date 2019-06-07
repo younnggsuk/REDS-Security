@@ -34,8 +34,7 @@
 	- Default control endpoint인 Endpoint 0에는 descriptor가 존재하지 않으며 한 USB 장치에 여러 개의 Endpoint descriptor가 존재할 수 있다.
  
 ## 4. USB device class
-- 앞에서 간단하게 설명한 Interface descriptor의 구조체를 자세히 살펴보면 다음과 같다.
-- linux/include/uapi/linux/usb/ch9.h
+- 앞에서 간단하게 설명한 Interface descriptor의 구조체를 자세히 살펴보면 다음과 같다. (linux/include/uapi/linux/usb/ch9.h)
 	~~~
 	struct usb_interface_descriptor {
 		__u8 bLength;
@@ -50,8 +49,7 @@
 	}
 	~~~
 
-- 위 구조체의 필드중 bInterfaceClass가 USB 장치의 class를 나타내는 필드이며 이 필드에 들어가는 값들은 아래와 같이 정의되어 있다.
-- (linux/include/uapi/linux/usb/ch9.h)
+- 위 구조체의 필드중 bInterfaceClass가 USB 장치의 class를 나타내는 필드이며 이 필드에 들어가는 값들은 아래와 같이 정의되어 있다. (linux/include/uapi/linux/usb/ch9.h)
 	~~~
 	/*
 	 * Device and/or Interface Class codes
@@ -83,77 +81,88 @@
 - 위의 정의된 값들 중 8번을 보면 USB_CLASS_MASS_STORAGE라고 되어있고 이 값이 표준 문서에 명시된 USB device class 08h(USB mass storage)에 해당한다는 것을 알 수 있다.
 - 따라서 연결되는 USB 장치의 Interface descriptor 구조체의 항목 중 bInterfaceClass 필드를 보고 USB_CLASS_MASS_STORAGE가 아니라면 연결을 허가하지 않도록 커널 코드를 수정하면 표준의 요구사항에 맞게 USB 장치를 제어할 수 있다는 것을 알 수 있다.
 
-5. Linux kernel의 USB의 device와 device driver
-Linux kernel에서 usb 장치는 struct usb_device 로 나타내고 장치의 인터페이스는 struct usb_interface로 나타낸다. 그리고 struct usb_device는 struct usb_device_driver와 binding이되며 struct usb_interface는 struct usb_driver와 binding이 되는 구조이다.
-5.1 struct usb_device와 struct usb_device_driver
-Linux kernel 내에서 usb port에 연결되는 모든 물리적 장치는 struct usb_device로 나타낸다. (Root hub, 외장 hub 등도 포함) 그리고 struct usb_device에 대응되는 driver는 struct usb_device_driver이며 USB 장치 모두의 driver이므로 kernel에는 usb_device_driver가 1개만 존재한다. 예를 들어 usb host port에 외장 허브 1개와 마우스가 연결되어 있다면, kernel에서 생성된 struct usb_device는 Root hub(Host controller), 외장 허브, 마우스로 총 3개이며 usb_device_driver는 1개만 존재한다. 
-5.2 struct usb_interface와 struct usb_driver
-Linux kernel에서는 USB 장치 자체의 구조체(struct usb_device) 외에 장치의 interface마다 struct usb_interface와 이에 대응되는 driver인 struct usb_driver라는 구조체를 형성한다. 따라서 usb의 기능마다(interface마다) driver가 따로 binding되는 구조이다. 예를 들어, usb host port에 외장 허브, 마우스, 저장소용 USB 장치가 연결되어 있다면, Root hub와 외장 허브의 interface에 해당하는 hub interface의 usb_driver, 마우스의 HID interface에 해당하는 usb_driver, 저장소의 mass storage에 해당하는 usb_driver로 총 3개의 interface driver가 존재하게 된다.
+## 5. Linux kernel의 USB의 device와 device driver
+- Linux kernel에서 usb 장치는 struct usb_device 로 나타내고 장치의 인터페이스는 struct usb_interface로 나타낸다.
+- 그리고 struct usb_device는 struct usb_device_driver와 binding이되며 struct usb_interface는 struct usb_driver와 binding이 되는 구조이다.
+
+	### 5.1 struct usb_device와 struct usb_device_driver
+	- Linux kernel 내에서 usb port에 연결되는 모든 물리적 장치는 struct usb_device로 나타낸다. (Root hub, 외장 hub 등도 포함)
+	- 그리고 struct usb_device에 대응되는 driver는 struct usb_device_driver이며 USB 장치 모두의 driver이므로 kernel에는 usb_device_driver가 1개만 존재한다.
+	- 예를 들어 usb host port에 외장 허브 1개와 마우스가 연결되어 있다면, kernel에서 생성된 struct usb_device는 Root hub(Host controller), 외장 허브, 마우스로 총 3개이며 usb_device_driver는 1개만 존재한다. 
+	
+	### 5.2 struct usb_interface와 struct usb_driver
+	- Linux kernel에서는 USB 장치 자체의 구조체(struct usb_device) 외에 장치의 interface마다 struct usb_interface와 이에 대응되는 driver인 struct usb_driver라는 구조체를 형성한다.
+	- 따라서 usb의 기능마다(interface마다) driver가 따로 binding되는 구조이다.
+	- 예를 들어, usb host port에 외장 허브, 마우스, 저장소용 USB 장치가 연결되어 있다면, Root hub와 외장 허브의 interface에 해당하는 hub interface의 usb_driver, 마우스의 HID interface에 해당하는 usb_driver, 저장소의 mass storage에 해당하는 usb_driver로 총 3개의 interface driver가 존재하게 된다.
+
+## 6. dmesg를 통한 USB장치 연결 후 출력 메시지 분석
+- USB 장치가 연결되면 출력되는 메시지를 dmesg 명령어를 통해 확인해보면 아래와 같다.
+	~~~
+	usb 1-2: new high-speed USB device number 2 using xhci_hcd
+	usb 1-2: New USB device found, idVendor=043e, idProduct=70d6, bcdDevice=11.00
+	usb 1-2: New USB device strings: Mfr=1, Product=2, SerialNumber=3
+	usb 1-2: Product: USB Flash Drive
+	usb 1-2: Manufacturer: LG Electronics
+	usb 1-2: SerialNumber: D41HGF07000000124
+	usb-storage 1-2:1.0: USB Mass Storage device detected
+	scsi host9: usb-storage 1-2:1.0
+	usbcore: registered new interface driver usb-storage
+	usbcore: registered new interface driver uas
+	scsi 9:0:0:0: Direct-Access     LGE      USB Drive        1100 PQ: 0 ANSI: 4
+	sd 9:0:0:0: Attached scsi generic sg2 type 0
+	sd 9:0:0:0: [sdc] 31703040 512-byte logical blocks: (16.2 GB/15.1 GiB)
+	sd 9:0:0:0: [sdc] Write Protect is off
+	sd 9:0:0:0: [sdc] Mode Sense: 43 00 00 00
+	sd 9:0:0:0: [sdc] No Caching mode page found
+	sd 9:0:0:0: [sdc] Assuming drive cache: write through
+	sdc: sdc1
+	sd 9:0:0:0: [sdc] Attached SCSI removable disk
+	FAT-fs (sdc1): Volume was not properly unmounted. Some data may be corrupt. Please run fsck
+	~~~
+- 위 메시지를 보면 usb와 관련된 2가지의 메시지가 출력되는 것을 확인할 수 있다.
+	- 가장 먼저 usb 1-2에서 usb의 대략적인 정보를 출력
+	- usb core에서 interface driver를 등록
+- 이를 통해 알 수 있는 것은 가장 먼저 1번째 메시지에서 장치를 감지하고 종류를 인식한 후 2번째 메시지를 통해 interface driver를 등록한다는 것이다.
+- interface driver가 등록되면 device와binding이 될 것이고 class에 따른 기능을 수행할 수 있게 되는 것이므로 2번째 메시지가 출력되기 전에 연결을 제한해야 한다.
+- 이제 이 메시지들을 따라가보면서 인식되는 과정을 살펴보자.
  
-6. dmesg를 통한 USB장치 연결 후 출력 메시지 분석
-USB 장치가 연결되면 출력되는 메시지를 dmesg 명령어를 통해 확인해보면 아래와 같다.
-usb 1-2: new high-speed USB device number 2 using xhci_hcd
-usb 1-2: New USB device found, idVendor=043e, idProduct=70d6, bcdDevice=11.00
-usb 1-2: New USB device strings: Mfr=1, Product=2, SerialNumber=3
-usb 1-2: Product: USB Flash Drive
-usb 1-2: Manufacturer: LG Electronics
-usb 1-2: SerialNumber: D41HGF07000000124
-usb-storage 1-2:1.0: USB Mass Storage device detected
-scsi host9: usb-storage 1-2:1.0
-usbcore: registered new interface driver usb-storage
-usbcore: registered new interface driver uas
-scsi 9:0:0:0: Direct-Access     LGE      USB Drive        1100 PQ: 0 ANSI: 4
-sd 9:0:0:0: Attached scsi generic sg2 type 0
-sd 9:0:0:0: [sdc] 31703040 512-byte logical blocks: (16.2 GB/15.1 GiB)
-sd 9:0:0:0: [sdc] Write Protect is off
-sd 9:0:0:0: [sdc] Mode Sense: 43 00 00 00
-sd 9:0:0:0: [sdc] No Caching mode page found
-sd 9:0:0:0: [sdc] Assuming drive cache: write through
-sdc: sdc1
-sd 9:0:0:0: [sdc] Attached SCSI removable disk
-FAT-fs (sdc1): Volume was not properly unmounted. Some data may be corrupt. Please run fsck
-
-위 메시지를 보면 usb와 관련된 2가지의 메시지가 출력되는 것을 확인할 수 있다.
-1.	가장 먼저usb 1-2에서 usb의 대략적인 정보를 출력
-2.	usb core에서 interface driver를 등록
-
-이를 통해 알 수 있는 것은 가장 먼저 1번째 메시지에서 장치를 감지하고 종류를 인식한 후 2번째 메시지를 통해 interface driver를 등록한다는 것이다. interface driver가 등록되면 device와binding이 될 것이고 class에 따른 기능을 수행할 수 있게 되는 것이므로 2번째 메시지가 출력되기 전에 연결을 제한해야 한다. 이제 이 메시지들을 따라가보면서 인식되는 과정을 살펴보자.
- 
-위의 3가지 메시지 중 가장 먼저 출력된 1번 메시지에서
-usb 1-2: new high-speed USB device number 2 using xhci_hcd의 출력 지점을 찾아보면 hub_port_init()에서 다음의 함수를 통해 출력된 것을 확인할 수 있다.
-(linux/drivers/usb/core/hub.c)
-dev_info(&udev->dev, "%s %s USB device number %d using %s\n", 
-(udev->config) ? "reset" : "new", speed, devnum,
-udev->bus->controller->driver->name);
-
-그리고 그 뒤의 
-usb 1-2: New USB device found, idVendor=043e, idProduct=70d6, bcdDevice=11.00
-usb 1-2: New USB device strings: Mfr=1, Product=2, SerialNumber=3
-usb 1-2: Product: USB Flash Drive
-usb 1-2: Manufacturer: LG Electronics
-usb 1-2: SerialNumber: D41HGF07000000124
-의 출력 지점을 찾아보면 announce_device()에서 다음의 함수를 통해 출력된 것을 확인할 수 있다. (linux/drivers/usb/core/hub.c)
-dev_info(&udev->dev, "New USB device found, idVendor=%04x, idProduct=%04x, 
-bcdDevice=%2x.%02x\n", 
-le16_to_cpu(udev->descriptor.idVendor),
-le16_to_cpu(udev->descriptor.idProduct),
-bcdDevice >> 8, bcdDevice & 0xff);
-dev_info(&udev->dev, "New USB device strings: Mfr=%d, Product=%d,
-SerialNumber=%d\n",
-udev->descriptor.iManufacturer,
-udev->descriptor.iProduct,
-udev->descriptor.iSerialNumber);
-show_string(udev, "Product", udev->product);
-show_string(udev, "Manufacturer", udev->manufacturer);
-show_string(udev, "SerialNumber", udev->serial);
-
-그런데 위의 두 함수의 형태를 살펴보면 두 함수 모두 인자로 struct usb_device *udev를 받고 있는 것을 확인할 수 있다.
-static int hub_port_init (struct usb_hub *hub, struct usb_device *udev, 
-int port1, int retry_counter);
-static void announce_device(struct usb_device *udev);
-
- 
-따라서 위의 두 함수를 호출하기 전에 이미 usb_device구조체가 생성되었다는 것과 이 함수를 호출한 위치를 따라가보면 usb_device가 생성되는 지점을 찾을 수 있다는 것을 알 수 있다.
+- 위의 3가지 메시지 중 가장 먼저 출력된 1번 메시지에서 usb 1-2: new high-speed USB device number 2 using xhci_hcd의 출력 지점을 찾아보면 hub_port_init()에서 다음의 함수를 통해 출력된 것을 확인할 수 있다. (linux/drivers/usb/core/hub.c)
+	~~~
+	dev_info(&udev->dev, "%s %s USB device number %d using %s\n", 
+	(udev->config) ? "reset" : "new", speed, devnum,
+	udev->bus->controller->driver->name);
+	~~~
+- 그리고 그 뒤의
+	~~~
+	usb 1-2: New USB device found, idVendor=043e, idProduct=70d6, bcdDevice=11.00
+	usb 1-2: New USB device strings: Mfr=1, Product=2, SerialNumber=3
+	usb 1-2: Product: USB Flash Drive
+	usb 1-2: Manufacturer: LG Electronics
+	usb 1-2: SerialNumber: D41HGF07000000124
+	~~~
+- 의 출력 지점을 찾아보면 announce_device()에서 다음의 함수를 통해 출력된 것을 확인할 수 있다. (linux/drivers/usb/core/hub.c)
+	~~~
+	dev_info(&udev->dev, "New USB device found, idVendor=%04x, idProduct=%04x, 
+	bcdDevice=%2x.%02x\n", 
+	le16_to_cpu(udev->descriptor.idVendor),
+	le16_to_cpu(udev->descriptor.idProduct),
+	bcdDevice >> 8, bcdDevice & 0xff);
+	dev_info(&udev->dev, "New USB device strings: Mfr=%d, Product=%d,
+	SerialNumber=%d\n",
+	udev->descriptor.iManufacturer,
+	udev->descriptor.iProduct,
+	udev->descriptor.iSerialNumber);
+	show_string(udev, "Product", udev->product);
+	show_string(udev, "Manufacturer", udev->manufacturer);
+	show_string(udev, "SerialNumber", udev->serial);
+	~~~
+- 그런데 위의 두 함수의 형태를 살펴보면 두 함수 모두 인자로 struct usb_device *udev를 받고 있는 것을 확인할 수 있다.
+	~~~
+	static int hub_port_init (struct usb_hub *hub, struct usb_device *udev, 
+	int port1, int retry_counter);
+	static void announce_device(struct usb_device *udev);
+	~~~
+ - 따라서 위의 두 함수를 호출하기 전에 이미 usb_device구조체가 생성되었다는 것과 이 함수를 호출한 위치를 따라가보면 usb_device가 생성되는 지점을 찾을 수 있다는 것을 알 수 있다.
 
 7. struct usb_device의 allocation
 위에서 설명한 함수중 hub_port_init()의 호출 위치를 따라가보면 hub_port_connect()가 나온다. (linux/drivers/usb/core/hub.c)
