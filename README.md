@@ -16,22 +16,21 @@
 - 각 descriptor들은 구조체로 정의되어 있으며 상위 계층 descriptor 구조체에는 하위 계층 descriptor의 개수 정보를 가지고 있다. 
 	![usb_descriptors](./images/usb_descriptors.png)
  
+	### 3.1 Device descriptor
+	- Device descriptor에는 지원되는 USB 버전, Product ID, Vendor ID, 그리고 configuration descriptor의 수 등의 정보가 있다.
+	- Device descriptor는 USB 장치 전체를 대표하는 descriptor이므로 한 USB 장치에는 1개의 device descriptor만 존재한다. 
 
-### 3.1 Device descriptor
-- Device descriptor에는 지원되는 USB 버전, Product ID, Vendor ID, 그리고 configuration descriptor의 수 등의 정보가 있다.
-- Device descriptor는 USB 장치 전체를 대표하는 descriptor이므로 한 USB 장치에는 1개의 device descriptor만 존재한다. 
+	### 3.2 Configuration descriptor
+	- Configuration descriptor에는 해당 configuration에서의 장치의 전원 공급 방법, 최대 전력 소비량, 그리고 Interface descriptor의 수 등의 정보가 있다.
+	- 한 USB 장치에 여러 개의 Configuration descriptor가 존재할 수 있다.
 
-### 3.2 Configuration descriptor
-- Configuration descriptor에는 해당 configuration에서의 장치의 전원 공급 방법, 최대 전력 소비량, 그리고 Interface descriptor의 수 등의 정보가 있다.
-- 한 USB 장치에 여러 개의 Configuration descriptor가 존재할 수 있다.
+	### 3.3 Interface descriptor
+	- Interface descriptor에는 해당 Interface의 기능이 정의된 class 정보와 대체 인터페이스 정보(여러 기능을 가져야 하는 경우), 그리고 Endpoint descriptor의 수 등의 정보가 있다.
+	- 한 USB 장치에 여러 개의 Interface descriptor가 존재할 수 있다.
 
-### 3.3 Interface descriptor
-- Interface descriptor에는 해당 Interface의 기능이 정의된 class 정보와 대체 인터페이스 정보(여러 기능을 가져야 하는 경우), 그리고 Endpoint descriptor의 수 등의 정보가 있다.
-- 한 USB 장치에 여러 개의 Interface descriptor가 존재할 수 있다.
-
-### 3.4 Endpoint descriptor
-- Endpoint Descriptor는 실제 통신이 일어나는 지점인 Endpoint에 대한 전송 유형, 방향, 패킷 크기 등의 정보가 있다.
-- Default control endpoint인 Endpoint 0에는 descriptor가 존재하지 않으며 한 USB 장치에 여러 개의 Endpoint descriptor가 존재할 수 있다.
+	### 3.4 Endpoint descriptor
+	- Endpoint Descriptor는 실제 통신이 일어나는 지점인 Endpoint에 대한 전송 유형, 방향, 패킷 크기 등의 정보가 있다.
+	- Default control endpoint인 Endpoint 0에는 descriptor가 존재하지 않으며 한 USB 장치에 여러 개의 Endpoint descriptor가 존재할 수 있다.
  
 ## 4. USB device class
 - 앞에서 간단하게 설명한 Interface descriptor의 구조체를 자세히 살펴보면 다음과 같다.
