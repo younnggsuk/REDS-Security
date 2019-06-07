@@ -2,7 +2,8 @@
 
 ## 1. 개요
 - REDS security의 operational protection 요구사항에 따라 460-network를 구성하는 장비의 connection point는 data source로의 연결에만 동작을 허가해야 하며 특히 USB 장치에 대해서는 USB device class 08h (USB mass storage)만 REDS에 사용할 수 있도록 해야 한다.
-- 따라서 리눅스 커널이 어떻게 연결된 USB 장치의 class를 인식하고 그에 맞는 디바이스 드라이버를 연결시키는지 이해하고 커널 소스를 수정하여 포트마다 지정된 USB device class에만 동작을 하도록 커널을 수정한다. (Linux ubuntu사용, 커널 버전 : 4.19.0-rc5+)
+- 따라서 리눅스 커널이 어떻게 연결된 USB 장치의 class를 인식하고 그에 맞는 디바이스 드라이버를 연결시키는지 이해하고 커널 소스를 수정하여 포트마다 지정된 USB device class에만 동작을 하도록 커널을 수정한다.
+- Linux ubuntu사용, 커널 버전 : 4.19.0-rc5+
 
 ## 2. Linux의 USB Subsystem
 - USB 장치가 물리적으로 연결되면 USB host controller라고 하는 하드웨어 장치에서 먼저 이를 감지한다. (USB host controller는 PCI장치와 같은 bus 장치이며 기본적으로 Root Hub라고 하는 허브가 물리적으로 연결되어 있다. 따라서 장치가 실제로 연결되는 위치는 Root Hub의 한 포트이다.)
@@ -34,7 +35,7 @@
  
 ## 4. USB device class
 - 앞에서 간단하게 설명한 Interface descriptor의 구조체를 자세히 살펴보면 다음과 같다.
-- (linux/include/uapi/linux/usb/ch9.h)
+- linux/include/uapi/linux/usb/ch9.h
 	~~~
 	struct usb_interface_descriptor {
 		__u8 bLength;
