@@ -120,13 +120,11 @@
 	FAT-fs (sdc1): Volume was not properly unmounted. Some data may be corrupt. Please run fsck
 	~~~
 - 위 메시지를 보면 usb와 관련된 2가지의 메시지가 출력되는 것을 확인할 수 있다.
-	- 가장 먼저 usb 1-2에서 usb의 대략적인 정보를 출력
-	- usb core에서 interface driver를 등록
+	1. usb 1-2에서 usb의 대략적인 정보를 출력
+	2. usb core에서 interface driver를 등록
 - 이를 통해 알 수 있는 것은 가장 먼저 1번째 메시지에서 장치를 감지하고 종류를 인식한 후 2번째 메시지를 통해 interface driver를 등록한다는 것이다.
 - interface driver가 등록되면 device와binding이 될 것이고 class에 따른 기능을 수행할 수 있게 되는 것이므로 2번째 메시지가 출력되기 전에 연결을 제한해야 한다.
-- 이제 이 메시지들을 따라가보면서 인식되는 과정을 살펴보자.
- 
-- 위의 3가지 메시지 중 가장 먼저 출력된 1번 메시지에서 usb 1-2: new high-speed USB device number 2 using xhci_hcd의 출력 지점을 찾아보면 hub_port_init()에서 다음의 함수를 통해 출력된 것을 확인할 수 있다. (linux/drivers/usb/core/hub.c)
+- 이제 이 메시지들을 따라가보면서 인식되는 과정을 살펴보면, 위의 3가지 메시지 중 가장 먼저 출력된 1번 메시지에서 usb 1-2: new high-speed USB device number 2 using xhci_hcd의 출력 지점을 찾아보면 hub_port_init()에서 다음의 함수를 통해 출력된 것을 확인할 수 있다. (linux/drivers/usb/core/hub.c)
 	~~~
 	dev_info(&udev->dev, "%s %s USB device number %d using %s\n", 
 	(udev->config) ? "reset" : "new", speed, devnum,
@@ -140,7 +138,7 @@
 	usb 1-2: Manufacturer: LG Electronics
 	usb 1-2: SerialNumber: D41HGF07000000124
 	~~~
-- 의 출력 지점을 찾아보면 announce_device()에서 다음의 함수를 통해 출력된 것을 확인할 수 있다. (linux/drivers/usb/core/hub.c)
+	의 출력 지점을 찾아보면 announce_device()에서 다음의 함수를 통해 출력된 것을 확인할 수 있다. (linux/drivers/usb/core/hub.c)
 	~~~
 	dev_info(&udev->dev, "New USB device found, idVendor=%04x, idProduct=%04x, 
 	bcdDevice=%2x.%02x\n", 
@@ -162,7 +160,8 @@
 	int port1, int retry_counter);
 	static void announce_device(struct usb_device *udev);
 	~~~
- - 따라서 위의 두 함수를 호출하기 전에 이미 usb_device구조체가 생성되었다는 것과 이 함수를 호출한 위치를 따라가보면 usb_device가 생성되는 지점을 찾을 수 있다는 것을 알 수 있다.
+
+- 따라서 위의 두 함수를 호출하기 전에 이미 usb_device구조체가 생성되었다는 것과 이 함수를 호출한 위치를 따라가보면 usb_device가 생성되는 지점을 찾을 수 있다는 것을 알 수 있다.
 
 7. struct usb_device의 allocation
 위에서 설명한 함수중 hub_port_init()의 호출 위치를 따라가보면 hub_port_connect()가 나온다. (linux/drivers/usb/core/hub.c)
