@@ -8,29 +8,34 @@
 - USB 장치가 물리적으로 연결되면 USB host controller라고 하는 하드웨어 장치에서 먼저 이를 감지한다. (USB host controller는 PCI장치와 같은 bus 장치이며 기본적으로 Root Hub라고 하는 허브가 물리적으로 연결되어 있다. 따라서 장치가 실제로 연결되는 위치는 Root Hub의 한 포트이다.)
 - 그리고 이 host controller의 종류와 일치하는 host controller driver는 host controller의 물리 계층 정보를 가져와서 상위 USB 프로토콜 명세의 정보로 변환하고 USB core에 정보를 채워 놓는다.
 - 이렇게 되면 커널 영역의 driver들은 이 USB core의 정보를 통해 실제 연결된 USB 장치의 정보에 접근할 수 있고 이들을 관리할 수 있게 된다.
-- [usbsubsystem](./images/usb_subsystem.png) {:.aligncenter}
+- [usbsubsystem](./images/usb_subsystem.png)
 
 ## 3. USB Descriptors
 - 모든 USB 장치는 USB descriptor를 통해 자신의 정보를 host에게 알려준다.
 - USB descriptor의 종류는 Device Descriptor, Configuration Descriptor, Interface Descriptor, Endpoint Descriptor로 4가지가 있고 아래 그림과 같은 계층 구조를 가진다.
 - 각 descriptor들은 구조체로 정의되어 있으며 상위 계층 descriptor 구조체에는 하위 계층 descriptor의 개수 정보를 가지고 있다. 
-- [usbsubsystem](./images/usb_descriptors.png) {:.aligncenter}
+- [usbsubsystem](./images/usb_descriptors.png)
  
 
 ### 3.1 Device descriptor
-#### Device descriptor에는 지원되는 USB 버전, Product ID, Vendor ID, 그리고 configuration descriptor의 수 등의 정보가 있다. Device descriptor는 USB 장치 전체를 대표하는 descriptor이므로 한 USB 장치에는 1개의 device descriptor만 존재한다. 
+- Device descriptor에는 지원되는 USB 버전, Product ID, Vendor ID, 그리고 configuration descriptor의 수 등의 정보가 있다.
+- Device descriptor는 USB 장치 전체를 대표하는 descriptor이므로 한 USB 장치에는 1개의 device descriptor만 존재한다. 
 
 ### 3.2 Configuration descriptor
-#### Configuration descriptor에는 해당 configuration에서의 장치의 전원 공급 방법, 최대 전력 소비량, 그리고 Interface descriptor의 수 등의 정보가 있다. 한 USB 장치에 여러 개의 Configuration descriptor가 존재할 수 있다.
+- Configuration descriptor에는 해당 configuration에서의 장치의 전원 공급 방법, 최대 전력 소비량, 그리고 Interface descriptor의 수 등의 정보가 있다.
+- 한 USB 장치에 여러 개의 Configuration descriptor가 존재할 수 있다.
 
 ### 3.3 Interface descriptor
-#### Interface descriptor에는 해당 Interface의 기능이 정의된 class 정보와 대체 인터페이스 정보(여러 기능을 가져야 하는 경우), 그리고 Endpoint descriptor의 수 등의 정보가 있다. 한 USB 장치에 여러 개의 Interface descriptor가 존재할 수 있다.
+- Interface descriptor에는 해당 Interface의 기능이 정의된 class 정보와 대체 인터페이스 정보(여러 기능을 가져야 하는 경우), 그리고 Endpoint descriptor의 수 등의 정보가 있다.
+- 한 USB 장치에 여러 개의 Interface descriptor가 존재할 수 있다.
 
 ### 3.4 Endpoint descriptor
-#### Endpoint Descriptor는 실제 통신이 일어나는 지점인 Endpoint에 대한 전송 유형, 방향, 패킷 크기 등의 정보가 있다. Default control endpoint인 Endpoint 0에는 descriptor가 존재하지 않으며 한 USB 장치에 여러 개의 Endpoint descriptor가 존재할 수 있다.
+- Endpoint Descriptor는 실제 통신이 일어나는 지점인 Endpoint에 대한 전송 유형, 방향, 패킷 크기 등의 정보가 있다.
+- Default control endpoint인 Endpoint 0에는 descriptor가 존재하지 않으며 한 USB 장치에 여러 개의 Endpoint descriptor가 존재할 수 있다.
  
 ## 4. USB device class
-#### 앞에서 간단하게 설명한 Interface descriptor의 구조체를 자세히 살펴보면 다음과 같다. (linux/include/uapi/linux/usb/ch9.h)
+- 앞에서 간단하게 설명한 Interface descriptor의 구조체를 자세히 살펴보면 다음과 같다.
+- (linux/include/uapi/linux/usb/ch9.h)
 ~~~
 struct usb_interface_descriptor {
 	__u8 bLength;
@@ -45,7 +50,9 @@ struct usb_interface_descriptor {
 }
 ~~~
 
-위 구조체의 필드중 bInterfaceClass가 USB 장치의 class를 나타내는 필드이며 이 필드에 들어가는 값들은 아래와 같이 정의되어 있다. (linux/include/uapi/linux/usb/ch9.h)
+- 위 구조체의 필드중 bInterfaceClass가 USB 장치의 class를 나타내는 필드이며 이 필드에 들어가는 값들은 아래와 같이 정의되어 있다.
+- (linux/include/uapi/linux/usb/ch9.h)
+~~~
 /*
  * Device and/or Interface Class codes
  * as found in bDeviceClass or bInterfaceClass
@@ -71,7 +78,7 @@ struct usb_interface_descriptor {
 
 
 #define USB_SUBCLASS_VENDOR_SPEC	0xff
-
+~~~
 
 위의 정의된 값들 중 8번을 보면 USB_CLASS_MASS_STORAGE라고 되어있고 이 값이 표준 문서에 명시된 USB device class 08h(USB mass storage)에 해당한다는 것을 알 수 있다.
 따라서 연결되는 USB 장치의 Interface descriptor 구조체의 항목 중 bInterfaceClass 필드를 보고 USB_CLASS_MASS_STORAGE가 아니라면 연결을 허가하지 않도록 커널 코드를 수정하면 표준의 요구사항에 맞게 USB 장치를 제어할 수 있다는 것을 알 수 있다.
