@@ -295,7 +295,7 @@
 					dev_err(&udev->dev, "can't read configurations, error %d\n", err);
 
 				return err;
-				    }
+			}
 		}
 		(생략)
 	}
