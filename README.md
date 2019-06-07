@@ -611,28 +611,37 @@
 - 이 소스에서는 1번 roothub의 2, 9번 port를 각각 MASS STORAGE, HID에만 제한하도록 코드를 구성해서 if(dev->bus->busnum == 1), switch문에서의 case 2 :와 case 9 :와 같이 되어있다.
 - 만약 다른 roothub, port들을 제한하려면 위의 소스에서 번호를 수정한 후 다시 컴파일을 하고 해당 커널로 부팅을 해야 한다.
  
-11. 실험 및 결과
-11.1 실험 순서
-①	PC의 모든 port들에 usb장치들을 연결해보며 dmesg를 통해 커널이 roothub와 port들의 번호를 어떻게 매기고 있는지 확인한다.
-②	10절에서 수정한 linux/drivers/usb/core/config.c의 usb_parse_configuration()을 제한하고자 하는 roothub, port의 번호로 수정한 후 컴파일하고 해당 커널로 부팅한다. (여기서는 1번 roothub의 2번 port는 Mass storage, 9번 port는 HID로 제한했다.
-③	장치 class를 제한한 port에 usb장치를 연결 후 작동하는지 확인하고 dmesg를 통해 출력결과를 확인한다.
+## 11. 실험 및 결과
+	### 11.1 실험 순서
+		1. PC의 모든 port들에 usb장치들을 연결해보며 dmesg를 통해 커널이 roothub와 port들의 번호를 어떻게 매기고 있는지 확인한다.
+		2. 10절에서 수정한 linux/drivers/usb/core/config.c의 usb_parse_configuration()을 제한하고자 하는 roothub, port의 번호로 수정한 후 컴파일하고 해당 커널로 부팅한다. (여기서는 1번 roothub의 2번 port는 Mass storage, 9번 port는 HID로 제한했다.
+		3. 장치 class를 제한한 port에 usb장치를 연결 후 작동하는지 확인하고 dmesg를 통해 출력결과를 확인한다.
 
-11.2 실험 결과
- 
-9번 port에 저장소용 usb를 연결한 후 2번 port에 마우스를 연결했을 때의 dmesg 출력 결과이다. 저장소용 usb는 인식이 되지 않았으며 마우스도 인식이 되지 않아서 작동이 불가능했다.
+	###11.2 실험 결과
+		- ![usb_result](./images/usb_result.png)
+		- 9번 port에 저장소용 usb를 연결한 후 2번 port에 마우스를 연결했을 때의 dmesg 출력 결과이다.
+		- 저장소용 usb는 인식이 되지 않았으며 마우스도 인식이 되지 않아서 작동이 불가능했다.
  
-12. 개선 사항
-USB의 장치 class 검사를 통한 port별 작동 제한은 수행했으나 추가적인 개선사항이 필요하다.
-12.1 반환 후 구조체의 처리
-수정한 소스에서 -1 반환 후 과정들을 보면 해당 configuration descriptor는 kfree를 해주는 것이 확인되었으나(이 또한 모든 configuration descriptor를 kfree해주는 것이 아니다) usb 장치의 구조체인 struct usb_device가 완전히 제거되는지는 확인하지 못했다. 
-12.2 전원 관련 및 USB 연결 상태 함수에 대한 이해 부족
-수정한 소스에서 -1 반환 후 과정들 중 usb_new_device()의 fail부분을 보면 
-usb_set_device_state(udev, USB_STATE_NOTATTACHED);
-pm_runtime_disable(&udev->dev);
-pm_runtime_set_suspended(&udev->dev);
+## 12. 개선 사항
+- USB의 장치 class 검사를 통한 port별 작동 제한은 수행했으나 추가적인 개선사항이 필요하다.
+	### 12.1 반환 후 구조체의 처리
+		- 수정한 소스에서 -1 반환 후 과정들을 보면 해당 configuration descriptor는 kfree를 해주는 것이 확인되었으나(이 또한 모든 configuration descriptor를 kfree해주는 것이 아니다) usb 장치의 구조체인 struct usb_device가 완전히 제거되는지는 확인하지 못했다. 
 
-위의 3가지 함수가 호출되는데 이는 전원 및 연결 상태에 관련된 함수이며 hub(roothub인 host controller)에서 연결된 장치들을 관리하는 부분이다. 함수의 이름과 간단한 설명을 통한 대략적인 이해를 통해 구현에는 성공을 했으나 이 부분에 대한 정확한 이해가 부족하다. 따라서 이 함수에 의해 일어나는 과정들을 분석하는 것이 필요하다.
-12.2 반환의 중복
-결과를 보면 총 4번의 반환이 나타나는 것을 확인할 수 있다. 이는 hub_port_connect()의 usb_phy_notify_connect()와 hub_power_remaining()의 호출로 인해 일어난 결과인데 이 부분도 정확한 이해가 부족해서 4번의 반환이 일어난다는 것만 고려했으며 이 과정에서 일어날 수 있는 일들에 대한 추가 분석을 통해 여러 상황들을 고려하는 것이 필요하다.
+	### 12.2 전원 관련 및 USB 연결 상태 함수에 대한 이해 부족
+		- 수정한 소스에서 -1 반환 후 과정들 중 usb_new_device()의 fail부분을 보면
+			~~~
+			usb_set_device_state(udev, USB_STATE_NOTATTACHED);
+			pm_runtime_disable(&udev->dev);
+			pm_runtime_set_suspended(&udev->dev);
+			~~~
+		- 위의 3가지 함수가 호출되는데 이는 전원 및 연결 상태에 관련된 함수이며 hub(roothub인 host controller)에서 연결된 장치들을 관리하는 부분이다.
+		- 함수의 이름과 간단한 설명을 통한 대략적인 이해를 통해 구현에는 성공을 했으나 이 부분에 대한 정확한 이해가 부족하다.
+		- 따라서 이 함수에 의해 일어나는 과정들을 분석하는 것이 필요하다.
+		
+	### 12.2 반환의 중복
+		- 결과를 보면 총 4번의 반환이 나타나는 것을 확인할 수 있다.
+		- 이는 hub_port_connect()의 usb_phy_notify_connect()와 hub_power_remaining()의 호출로 인해 일어난 결과인데 이 부분도 정확한 이해가 부족해서 4번의 반환이 일어난다는 것만 고려했으며 이 과정에서 일어날 수 있는 일들에 대한 추가 분석을 통해 여러 상황들을 고려하는 것이 필요하다.
 
-위의 개선 사항들을 정리해보면, 수정한 소스의 반환 과정에 대한 정확한 이해가 필요하다. 그리고 물리적으로 장치의 연결을 해제할 시 정상 작동한 경우와 작동을 제한된 경우에 어떤 과정이 일어나는지 정확한 분석을 통해 반환 과정의 비교가 필요하다. 따라서 작동을 제한한 경우에도 정상 작동한 경우와 동일하게 반환을 할 수 있도록 개선하는 것이 필요하다.
+- 위의 개선 사항들을 정리해보면, 수정한 소스의 반환 과정에 대한 정확한 이해가 필요하다.
+- 그리고 물리적으로 장치의 연결을 해제할 시 정상 작동한 경우와 작동을 제한된 경우에 어떤 과정이 일어나는지 정확한 분석을 통해 반환 과정의 비교가 필요하다.
+- 따라서 작동을 제한한 경우에도 정상 작동한 경우와 동일하게 반환을 할 수 있도록 개선하는 것이 필요하다.
